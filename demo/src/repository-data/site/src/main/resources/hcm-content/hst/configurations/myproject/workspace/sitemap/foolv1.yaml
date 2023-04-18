@@ -1,0 +1,27 @@
+/hst:hst/hst:configurations/myproject/hst:workspace/hst:sitemap/foolv1:
+  jcr:primaryType: hst:sitemapitem
+  hst:componentconfigurationid: hst:pages/foolv1-contentpage
+  hst:lastmodified: 2020-10-19T16:56:58.560+02:00
+  hst:pagetitle: foolv1
+  /barlv2secondary:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/foolv1-barlv2secondary-contentpage
+    hst:lastmodified: 2020-10-19T16:57:12.195+02:00
+    hst:pagetitle: barlv2secondary
+    hst:relativecontentpath: content/another-sample-document
+  /barlv2:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/barlv2-contentpage
+    hst:lastmodified: 2020-10-19T16:57:37.547+02:00
+    hst:pagetitle: barlv2
+    hst:relativecontentpath: content/sample-document
+    /foolv3:
+      jcr:primaryType: hst:sitemapitem
+      hst:componentconfigurationid: hst:pages/foolv3-contentpage
+      hst:lastmodified: 2020-10-19T16:59:02.987+02:00
+      hst:pagetitle: foolv3
+      /testlevel4:
+        jcr:primaryType: hst:sitemapitem
+        hst:componentconfigurationid: hst:pages/foolv1-barlv2-foolv3-testlevel4-contentpage
+        hst:lastmodified: 2020-10-19T16:59:36.105+02:00
+        hst:pagetitle: testlevel4

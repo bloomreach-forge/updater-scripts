@@ -1,0 +1,22 @@
+definitions:
+  config:
+    /hst:hst/hst:configurations/myproject/hst:prototypepages/two-columns:
+      jcr:primaryType: hst:component
+      jcr:mixinTypes: ['hst:prototypemeta']
+      hst:displayname: Two columns
+      hst:primarycontainer: main/content/right-container
+      hst:referencecomponent: hst:abstractpages/base
+      /main:
+        jcr:primaryType: hst:component
+        /content:
+          jcr:primaryType: hst:component
+          hst:template: two-columns.main.content
+          hst:componentclassname: test123
+          hst:parameternames: [test123, '456']
+          hst:parametervalues: [qwertt123]
+          /left-container:
+            jcr:primaryType: hst:containercomponent
+            hippo:identifier: ac851139-de1a-485d-a3b4-96d28e538de7
+          /right-container:
+            jcr:primaryType: hst:containercomponent
+            hippo:identifier: 4367b04e-61b5-4dc0-8dbb-44bb1207c86c

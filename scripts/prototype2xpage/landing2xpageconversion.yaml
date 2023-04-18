@@ -1,0 +1,685 @@
+/landing2xpageconversion:
+  jcr:primaryType: hipposys:updaterinfo
+  hipposys:batchsize: 10
+  hipposys:description: ''
+  hipposys:dryrun: false
+  hipposys:loglevel: DEBUG
+  hipposys:parameters: '{ "hstConfiguration": "myproject", "defaultXpageDocType":
+    "myproject:bannerdocument", "xPageFolder" : "xpages", "namespace": "myproject",
+    "publishPages": true }'
+  hipposys:query: hst:myproject/hst:configurations
+  hipposys:script: "package org.bloomreach.cms.scripts\r\n\r\nimport org.apache.commons.lang3.RandomStringUtils\r\
+    \nimport org.apache.commons.lang3.StringUtils\r\nimport org.hippoecm.hst.configuration.model.HstNode\r\
+    \nimport org.hippoecm.hst.platform.configuration.cache.HstNodeImpl\r\nimport org.hippoecm.hst.platform.configuration.components.JcrTemplateNodeConverter\r\
+    \nimport org.hippoecm.hst.util.PathUtils\r\nimport org.hippoecm.repository.api.HippoWorkspace\r\
+    \nimport org.hippoecm.repository.api.WorkflowException\r\nimport org.hippoecm.repository.standardworkflow.FolderWorkflow\r\
+    \nimport org.hippoecm.repository.standardworkflow.JcrTemplateNode\r\nimport org.onehippo.repository.documentworkflow.DocumentHandle\r\
+    \nimport org.onehippo.repository.documentworkflow.DocumentVariant\r\nimport org.onehippo.repository.documentworkflow.DocumentWorkflow\r\
+    \nimport org.onehippo.repository.update.BaseNodeUpdateVisitor\r\n\r\nimport javax.jcr.*\r\
+    \nimport java.rmi.RemoteException\r\nimport java.util.function.Function\r\nimport\
+    \ java.util.stream.Collectors\r\nimport java.util.stream.Stream\r\n\r\n/**\r\n\
+    \ * Convert existing landing page (prototype pages) to experience pages\r\n *\r\
+    \n * XPath:  hst:{artifactId}/hst:configurations/{configuration}\r\n *\r\n * Parameters:\r\
+    \n *   hstConfiguration (String)\r\n *   xPageFolder (String)\r\n *   defaultXpageDocType\
+    \ (String)\r\n *   namespace (String)\r\n *   publishPages (Boolean)\r\n *\r\n\
+    \ */\r\nclass LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor\
+    \ {\r\n\r\n    String hstConfiguration\r\n    String xPageFolder\r\n    String\
+    \ defaultXpageDocType\r\n    String namespace\r\n    Boolean publishPages\r\n\r\
+    \n    void initialize(Session session) {\r\n        hstConfiguration = (String)\
+    \ parametersMap.get(\"hstConfiguration\")\r\n        xPageFolder = (String) parametersMap.getOrDefault(\"\
+    xPageFolder\", \"xpages\")\r\n        defaultXpageDocType = (String) parametersMap.get(\"\
+    defaultXpageDocType\")\r\n        namespace = (String) parametersMap.get(\"namespace\"\
+    )\r\n        publishPages = (Boolean) parametersMap.getOrDefault(\"publishPages\"\
+    , true)\r\n        if (StringUtils.isEmpty(hstConfiguration)) {\r\n          \
+    \  log.error(\"hstConfiguration property is empty\")\r\n            throw new\
+    \ RuntimeException(\"hstConfiguration property is empty\")\r\n        }\r\n  \
+    \      if (StringUtils.isEmpty(defaultXpageDocType)) {\r\n            log.error(\"\
+    defaultXpageDocType property is empty\")\r\n            throw new RuntimeException(\"\
+    defaultXpageDocType property is empty\")\r\n        }\r\n        if (StringUtils.isEmpty(namespace))\
+    \ {\r\n            log.error(\"namespace property is empty\")\r\n            throw\
+    \ new RuntimeException(\"namespace property is empty\")\r\n        }\r\n     \
+    \   log.info(\"starting the landing 2 xpage conversion script with configuration\"\
+    \ +\r\n                \" hstConfiguration=\" + hstConfiguration +\r\n       \
+    \         \", xPageFolder=\" + xPageFolder +\r\n                \", defaultXpageDocType=\"\
+    \ + defaultXpageDocType) +\r\n                \", namespace=\" + namespace +\r\
+    \n                \", publishPages=\" + publishPages\r\n    }\r\n\r\n    @Override\r\
+    \n    boolean doUpdate(final Node node) throws RepositoryException {\r\n     \
+    \   if (node.isNodeType(\"hst:configurations\")) {\r\n            if (node.hasNode(hstConfiguration))\
+    \ {\r\n                final NodeIterator it = node.getNodes(hstConfiguration)\r\
+    \n                while (it.hasNext()) {\r\n                    final Node configuration\
+    \ = it.nextNode()\r\n                    if (configuration.isNodeType(\"hst:configuration\"\
+    )) {\r\n                        log.info(\"Initializing the in-memory channel\
+    \ configurations model\")\r\n                        HstConfiguration hstConfig\
+    \ = new HstConfiguration(configuration)\r\n                        hstConfig.startConversion()\r\
+    \n                    }\r\n                }\r\n            }\r\n        }\r\n\
+    \        return true\r\n    }\r\n\r\n    @Override\r\n    boolean undoUpdate(final\
+    \ Node node) throws RepositoryException, UnsupportedOperationException {\r\n \
+    \       return false\r\n    }\r\n\r\n\r\n    interface ToNode {\r\n        void\
+    \ toNode(Node container) throws RepositoryException\r\n    }\r\n\r\n    private\
+    \ class HstConfiguration {\r\n\r\n        final ProtoTypePages protoTypePages\r\
+    \n        final Workspace workspace\r\n        final SiteMap siteMap\r\n     \
+    \   final XPages xPages\r\n        final String name\r\n        final String path\r\
+    \n        final Node hst\r\n        final Node hstConfigNode\r\n        final\
+    \ Pages pages\r\n        final Session session\r\n\r\n        HstConfiguration(Node\
+    \ hstConfiguration) throws RepositoryException {\r\n            this.hstConfigNode\
+    \ = hstConfiguration\r\n            this.session = hstConfigNode.getSession()\r\
+    \n            this.name = hstConfiguration.getName()\r\n            this.path\
+    \ = hstConfiguration.getPath()\r\n            this.hst = hstConfiguration.getParent().getParent()\r\
+    \n            this.protoTypePages = hstConfiguration.hasNode(\"hst:prototypepages\"\
+    ) ? new ProtoTypePages(hstConfiguration.getNode(\"hst:prototypepages\")) : null\r\
+    \n            this.workspace = hstConfiguration.hasNode(\"hst:workspace\") ? new\
+    \ Workspace(this, hstConfiguration.getNode(\"hst:workspace\")) : null\r\n    \
+    \        this.siteMap = hstConfiguration.hasNode(\"hst:sitemap\") ? new SiteMap(this,\
+    \ hstConfiguration.getNode(\"hst:sitemap\")) : null\r\n            this.xPages\
+    \ = getOrCreateXPages(hstConfiguration)\r\n            this.pages = hstConfiguration.hasNode(\"\
+    hst:pages\") ? new Pages(this, hstConfiguration.getNode(\"hst:pages\")) : null\r\
+    \n        }\r\n\r\n        private XPages getOrCreateXPages(final Node hstConfiguration)\
+    \ throws RepositoryException {\r\n            if (hstConfiguration.hasNode(\"\
+    hst:xpages\")) {\r\n                return new XPages(hstConfiguration.getNode(\"\
+    hst:xpages\"))\r\n            } else {\r\n                final Node xPageContainer\
+    \ = hstConfiguration.addNode(\"hst:xpages\", \"hst:xpages\")\r\n             \
+    \   return new XPages(xPageContainer)\r\n            }\r\n        }\r\n\r\n  \
+    \      Node getSiteBaseNode() throws RepositoryException {\r\n            String\
+    \ hstSite = \"hst:sites/\" + name\r\n            if (hst.hasNode(hstSite)) {\r\
+    \n                final Node site = hst.getNode(hstSite)\r\n                if\
+    \ (site.hasProperty(\"hst:content\")) {\r\n                    return site.getProperty(\"\
+    hst:content\").getNode()\r\n                }\r\n            }\r\n           \
+    \ return null\r\n        }\r\n\r\n        void startConversion() throws RepositoryException\
+    \ {\r\n            log.info(\"Starting conversion of landing pages to XPages for\
+    \ \" + path)\r\n            executeStep0()\r\n            session.save()\r\n\r\
+    \n            executeStep1()\r\n            session.save()\r\n\r\n           \
+    \ executeStep2()\r\n            session.save()\r\n\r\n            executeStep3()\r\
+    \n            session.save()\r\n\r\n            executeStep4()\r\n           \
+    \ log.info(\"End conversion of landing pages to XPages for \" + path)\r\n    \
+    \        //step5b cleanup all pages which have no reference from the sitemapitems\r\
+    \n        }\r\n\r\n        Comparator<SiteMapItem> getReverseDepthComparator()\
+    \ {\r\n            return new Comparator<SiteMapItem>() {\r\n                @Override\r\
+    \n                int compare(final SiteMapItem o1, final SiteMapItem o2) {\r\n\
+    \                    return o2.depth <=> o1.depth\r\n                }\r\n   \
+    \         }\r\n        }\r\n\r\n\r\n        DocumentWorkflow getDocumentWorflow(Node\
+    \ documentHandle) {\r\n            return (DocumentWorkflow) ((HippoWorkspace)\
+    \ session.getWorkspace()).getWorkflowManager().getWorkflow(\"default\", documentHandle)\r\
+    \n        }\r\n\r\n        FolderWorkflow getFolderWorkflow(Node folder) {\r\n\
+    \            return (FolderWorkflow) ((HippoWorkspace) session.getWorkspace()).getWorkflowManager().getWorkflow(\"\
+    threepane\", folder)\r\n        }\r\n\r\n        private void applyXpageToDocument(Node\
+    \ handleNode, documentXpageManageableComponents, xPageByPage, String pageTitle)\
+    \ {\r\n            DocumentHandle handle = new DocumentHandle(handleNode)\r\n\
+    \            handle.initialize()\r\n            final Map<String, DocumentVariant>\
+    \ documents = handle.getDocuments()\r\n\r\n            documents.entrySet()\r\n\
+    \                    .stream()\r\n                    .filter({ documentVariant\
+    \ -> (\"draft\" != documentVariant.getKey()) })\r\n                    .forEach({\
+    \ documentVariant ->\r\n                        final Node documentNode = documentVariant.getValue().getNode()\r\
+    \n                        try {\r\n                            Node xpage\r\n\
+    \                            if (!documentNode.isNodeType(\"hst:xpagemixin\")\
+    \ && documentNode.canAddMixin(\"hst:xpagemixin\")) {\r\n                     \
+    \           log.info(\"adding pagemixin to document: \" + documentNode.getPath())\r\
+    \n                                documentNode.addMixin(\"hst:xpagemixin\")\r\n\
+    \                            }\r\n                            if (!documentNode.hasNode(\"\
+    hst:xpage\")) {\r\n                                log.info(\"adding hst:xpage\
+    \ to document: \" + documentNode.getPath())\r\n                              \
+    \  xpage = documentNode.addNode(\"hst:xpage\", \"hst:xpage\")\r\n            \
+    \                } else {\r\n                                log.info(\"getting\
+    \ hst:xpage from document: \" + documentNode.getPath())\r\n                  \
+    \              xpage = documentNode.getNode(\"hst:xpage\")\r\n               \
+    \                 log.info(\"removing all underlying xpage configuration \" +\
+    \ documentNode.getPath())\r\n                                final NodeIterator\
+    \ it = xpage.getNodes()\r\n                                while (it.hasNext())\
+    \ {\r\n                                    it.nextNode().remove()\r\n        \
+    \                        }\r\n                            }\r\n\r\n          \
+    \                  log.info(\"setting ${namespace}:title to sitemap page title:\
+    \ {}\", pageTitle)\r\n                            documentNode.setProperty(\"\
+    ${namespace}:title\", pageTitle)\r\n\r\n                            final List<ManageableComponent>\
+    \ componentList = documentXpageManageableComponents.stream()\r\n             \
+    \                       .map({ manageableComponent ->\r\n                    \
+    \                    final ManageableComponent copy = new ManageableComponent(manageableComponent)\r\
+    \n                                        copy.setName(manageableComponent.identifier)\r\
+    \n                                        copy.identifier = UUID.randomUUID().toString()\r\
+    \n                                        return copy\r\n                    \
+    \                }).collect(Collectors.toList())\r\n                         \
+    \   XPage documentXpage = new XPage(xpage)\r\n                            documentXpage.manageableComponents\
+    \ = componentList\r\n                            documentXpage.pageRef = xPageByPage.name\r\
+    \n                            documentXpage.addToNode(xpage)\r\n             \
+    \           } catch (RepositoryException e) {\r\n                            log.error(\"\
+    error while trying to convert a landing page to xpage\", e)\r\n              \
+    \          }\r\n                    })\r\n        }\r\n\r\n        Node getOrCreateDeepestXpageFolder(Node\
+    \ siteBaseNode, String path) throws RepositoryException {\r\n            boolean\
+    \ isTranslated = siteBaseNode.isNodeType(\"hippotranslation:translated\")\r\n\
+    \            log.info(\"base folder is translated: \" + isTranslated)\r\n    \
+    \        String locale = isTranslated ? siteBaseNode.getProperty(\"hippotranslation:locale\"\
+    ).getString() : null\r\n            Node xPageFolderNode\r\n            String[]\
+    \ folderType = ['new-document', 'new-folder']\r\n            if (siteBaseNode.hasNode(xPageFolder))\
+    \ {\r\n                log.info(\"root xpage folder does exist\")\r\n        \
+    \        xPageFolderNode = siteBaseNode.getNode(xPageFolder)\r\n             \
+    \   if (!xPageFolderNode.isNodeType(\"hippostd:folder\")) {\r\n              \
+    \      log.info(\"removing root xpage folder\")\r\n                    xPageFolderNode.remove()\r\
+    \n                    return getOrCreateDeepestXpageFolder(siteBaseNode, path)\r\
+    \n                }\r\n            } else {\r\n                log.info(\"root\
+    \ xpage folder does not exist, creating now..\")\r\n                xPageFolderNode\
+    \ = siteBaseNode.addNode(xPageFolder, \"hippostd:folder\")\r\n               \
+    \ xPageFolderNode.setProperty(\"hippostd:foldertype\", folderType)\r\n       \
+    \     }\r\n\r\n            translate(isTranslated, locale, xPageFolderNode)\r\n\
+    \r\n            if (!xPageFolderNode.isNodeType(\"hippostd:xpagefolder\")) {\r\
+    \n                xPageFolderNode.addMixin(\"hippostd:xpagefolder\")\r\n     \
+    \           xPageFolderNode.addMixin(\"mix:versionable\")\r\n                xPageFolderNode.setProperty(\"\
+    hippostd:channelid\", hstConfiguration)\r\n                xPageFolderNode.setProperty(\"\
+    hippostd:foldertype\", folderType)\r\n            }\r\n\r\n            if (StringUtils.isNotEmpty(path)\
+    \ && path.contains(\"/\")) {\r\n                final List<String> paths = new\
+    \ ArrayList<>(Arrays.asList(path.split(\"/\")))\r\n                paths.remove(paths.size()\
+    \ - 1)\r\n                for (String segment : paths) {\r\n                 \
+    \   if (xPageFolderNode.hasNode(segment)) {\r\n                        Node temp\
+    \ = xPageFolderNode.getNode(segment)\r\n                        if (temp.isNodeType(\"\
+    hippostd:folder\") && temp.isNodeType(\"hippostd:xpagefolder\")) {\r\n       \
+    \                     xPageFolderNode = temp\r\n                        } else\
+    \ if (temp.isNodeType(\"hippo:handle\")) {\r\n                            String\
+    \ id = RandomStringUtils.random(5, true, false)\r\n                          \
+    \  String originalName = temp.getName()\r\n                            String\
+    \ tempName = originalName + \"-\" + id\r\n                            String originalTempPath\
+    \ = temp.getPath()\r\n                            String newTempPath = temp.getParent().getPath()\
+    \ + tempName\r\n                            session.move(originalTempPath, newTempPath)\r\
+    \n                            xPageFolderNode = xPageFolderNode.addNode(segment,\
+    \ \"hippostd:folder\")\r\n                            xPageFolderNode.setProperty(\"\
+    hippostd:foldertype\", folderType)\r\n                            translate(isTranslated,\
+    \ locale, xPageFolderNode)\r\n                            if (!xPageFolderNode.isNodeType(\"\
+    hippostd:xpagefolder\")) {\r\n                                xPageFolderNode.addMixin(\"\
+    hippostd:xpagefolder\")\r\n                                xPageFolderNode.addMixin(\"\
+    mix:versionable\")\r\n                                xPageFolderNode.setProperty(\"\
+    hippostd:channelid\", hstConfiguration)\r\n                                xPageFolderNode.setProperty(\"\
+    hippostd:foldertype\", folderType)\r\n                            }\r\n      \
+    \                      session.move(newTempPath, xPageFolderNode.getPath() + \"\
+    /index\")\r\n                            final Node index = xPageFolderNode.getNode(\"\
+    index\")\r\n                            final NodeIterator it = index.getNodes()\r\
+    \n                            while (it.hasNext()) {\r\n                     \
+    \           final Node doc = it.nextNode()\r\n                               \
+    \ if (doc.isNodeType(\"hippo:document\")) {\r\n                              \
+    \      rename(doc, \"index\")\r\n                                }\r\n       \
+    \                     }\r\n                        }\r\n                    }\
+    \ else {\r\n                        xPageFolderNode = xPageFolderNode.addNode(segment,\
+    \ \"hippostd:folder\")\r\n                        if (!xPageFolderNode.isNodeType(\"\
+    hippostd:xpagefolder\")) {\r\n                            xPageFolderNode.addMixin(\"\
+    hippostd:xpagefolder\")\r\n                            xPageFolderNode.addMixin(\"\
+    mix:versionable\")\r\n                            xPageFolderNode.setProperty(\"\
+    hippostd:channelid\", hstConfiguration)\r\n                            xPageFolderNode.setProperty(\"\
+    hippostd:foldertype\", folderType)\r\n                        }\r\n          \
+    \              translate(isTranslated, locale, xPageFolderNode)\r\n          \
+    \          }\r\n                }\r\n            }\r\n            return xPageFolderNode\r\
+    \n        }\r\n\r\n        void translate(boolean isTranslated, String locale,\
+    \ Node xPageFolderNode){\r\n            if(isTranslated){\r\n                xPageFolderNode.addMixin(\"\
+    hippotranslation:translated\")\r\n                xPageFolderNode.setProperty(\"\
+    hippotranslation:locale\", locale)\r\n                xPageFolderNode.setProperty(\"\
+    hippotranslation:id\", UUID.randomUUID().toString())\r\n            }\r\n    \
+    \    }\r\n\r\n        void rename(Node node, String newName) throws RepositoryException\
+    \ {\r\n            session.move(node.getPath(), node.getParent().getPath() + \"\
+    /\" + newName)\r\n        }\r\n\r\n        private void createDevSiteMap(final\
+    \ HstConfiguration hstConfiguration, final int maxDepth) {\r\n            final\
+    \ List<SiteMapItem> siteMapItems = hstConfiguration.siteMap.siteMapItems\r\n \
+    \           SiteMapItem current = null\r\n            for (int i = 0; i < maxDepth;\
+    \ i++) {\r\n                if (current == null) {\r\n                    current\
+    \ = new SiteMapItem(\"_default_\", xPageFolder + \"/\\${\" + (i + 1) + \"}\")\r\
+    \n                    siteMapItems.add(current)\r\n                } else {\r\n\
+    \                    final SiteMapItem currentNexLevel = new SiteMapItem(\"_default_\"\
+    , \"\\${parent}/\\${\" + (i + 1) + \"}\")\r\n                    new SiteMapItem(\"\
+    _default_\", \"\\${parent}/\\${\" + (i + 1) + \"}\")\r\n                    current.siteMapItems.add(currentNexLevel)\r\
+    \n                    current.siteMapItems.add(new SiteMapItem(\"_index_\", \"\
+    \\${parent}/index\"))\r\n                    current = currentNexLevel\r\n   \
+    \             }\r\n            }\r\n            log.info(\"populated the (default)\
+    \ sitemap with sitemap items\")\r\n        }\r\n\r\n        void resetDocumentThroughWorkflow(DocumentWorkflow\
+    \ documentWorkflow) {\r\n            documentWorkflow.obtainEditableInstance()\r\
+    \n            documentWorkflow.commitEditableInstance()\r\n            if (publishPages)\
+    \ {\r\n                documentWorkflow.publish(new Date())\r\n            }\r\
+    \n        }\r\n\r\n        void executeStep0() {\r\n            final Node configurations\
+    \ = hstConfigNode.getParent()\r\n            if (configurations.hasNode(hstConfiguration\
+    \ + \"-preview\")) {\r\n                //todo step 0, preview configuration REMOVE\
+    \ by force\r\n                log.info(\"Step 0 - removing the preview configuration,\
+    \ before we start the conversion\")\r\n                configurations.getNode(hstConfiguration\
+    \ + \"-preview\").remove()\r\n            }\r\n        }\r\n\r\n        void executeStep1()\
+    \ {\r\n            log.info(\"Step 1 - convert prototype pages to xpages\")\r\n\
+    \            final Map<String, XPage> xpagesFromPrototypePages = protoTypePages.getProtoTypePages().stream()\r\
+    \n                    .map({ protoTypePage -> new XPage(protoTypePage) }).collect(Collectors.toMap(\r\
+    \n                    { e -> e.name },\r\n                    { e -> e }\r\n \
+    \           ))\r\n            xPages.getXPages().putAll(xpagesFromPrototypePages)\r\
+    \n            xPages.createXPagesFromPrototypePages()\r\n            log.info(\"\
+    Step 1 - end\")\r\n        }\r\n\r\n        void executeStep2() {\r\n        \
+    \    log.info(\"Step 2 - Convert all sitemap items which have a primary (a.k.a\
+    \ relative content path) document configured on the sitemap items in the workspace\"\
+    )\r\n            workspace.siteMap.getAllSiteMapItems().stream()\r\n         \
+    \           .filter({ siteMapItem -> siteMapItem.relativeContentPath != null &&\
+    \ siteMapItem.page != null })\r\n                    .forEach({ siteMapItem ->\r\
+    \n                        try {\r\n                            final String relativeContentPath\
+    \ = siteMapItem.relativeContentPath\r\n                            log.info(\"\
+    starting with :\" + siteMapItem.path)\r\n                            final Node\
+    \ siteBaseNode = getSiteBaseNode()\r\n                            final Page currentLandingPage\
+    \ = siteMapItem.page\r\n                            final String pageTitle = siteMapItem.pageTitle\r\
+    \n                            final Optional<XPage> xPageTemplate = xPages.findXPageTemplateByPage(currentLandingPage)\r\
+    \n                            if (siteBaseNode.hasNode(relativeContentPath) &&\
+    \ xPageTemplate.isPresent()) {\r\n                                final List<ManageableComponent>\
+    \ currentLandingPageManageableComponents = currentLandingPage.getAllManageableComponents()\r\
+    \n\r\n                                final Node handleNode = siteBaseNode.getNode(relativeContentPath)\r\
+    \n\r\n                                applyXpageToDocument(handleNode, currentLandingPageManageableComponents,\
+    \ xPageTemplate.get(), pageTitle)\r\n\r\n                                final\
+    \ Node sitemapitemNode = session.getNode(siteMapItem.path)\r\n               \
+    \                 log.info(\"cleaning up sitemap item\")\r\n                 \
+    \               sitemapitemNode.getProperty(\"hst:componentconfigurationid\").remove()\r\
+    \n\r\n                                log.info(\"cleaning up workspace page: \"\
+    \ + currentLandingPage.path)\r\n                                final Node pageNode\
+    \ = session.getNode(currentLandingPage.path)\r\n                             \
+    \   pageNode.remove()\r\n                                log.info(\"updated:\"\
+    \ + siteMapItem.path)\r\n                            } else {\r\n            \
+    \                    log.warn(\"non existing relative content path, please fix:\
+    \ \" + siteBaseNode.getPath() + \"/\" + relativeContentPath)\r\n             \
+    \               }\r\n                        } catch (RepositoryException | WorkflowException\
+    \ e) {\r\n                            log.error(\"error\", e)\r\n            \
+    \            }\r\n                    })\r\n            log.info(\"Step 2 - end\"\
+    )\r\n        }\r\n\r\n\r\n        void executeStep3() {\r\n            log.info(\"\
+    Step 3a - iterate through workspace to get all sitemap items\")\r\n          \
+    \  OptionalInt maxDepth = workspace.siteMap.getAllSiteMapItems().stream()\r\n\
+    \                    .filter({ siteMapItem -> !siteMapItem.isWildcard })\r\n//\
+    \                    .filter({ siteMapItem -> siteMapItem.relativeContentPath\
+    \ != null })\r\n                    .mapToInt({ siteMapItem -> siteMapItem.depth\
+    \ })\r\n                    .max()\r\n            if (maxDepth.isPresent()) {\r\
+    \n                log.info(\"Maximum sitemap items depth in the workspace = \"\
+    \ + maxDepth.getAsInt())\r\n                log.info(\"Step 3b - based on the\
+    \ Maximum Depth create the _default_ sitemap items (outside of the workspace)\
+    \ with the xpage folder name: \" + xPageFolder)\r\n                createDevSiteMap(this,\
+    \ maxDepth.getAsInt())\r\n                if (hstConfigNode.hasNode(\"hst:sitemap\"\
+    )) {\r\n                    Node siteMapContainer = hstConfigNode.getNode(\"hst:sitemap\"\
+    )\r\n                    siteMap.siteMapItems.stream().filter({ siteMapItem ->\
+    \ siteMapItem.xPageSiteMapItem }).forEach({ siteMapItem ->\r\n               \
+    \         try {\r\n                            siteMapItem.toNode(siteMapContainer)\r\
+    \n                        } catch (RepositoryException e) {\r\n              \
+    \              log.error(\"Error persisting the _default_ wildcard sitemap items\
+    \ outside of the workspace\", e)\r\n                        }\r\n            \
+    \        })\r\n                }\r\n            }\r\n            log.info(\"Step\
+    \ 3 - end\")\r\n        }\r\n\r\n        void executeStep4() {\r\n           \
+    \ log.info(\"Step 4 - Creating XPages from landingpages without a relative content\
+    \ path, this will create xpage documents in the XPage folder: \" + xPageFolder)\r\
+    \n            workspace.siteMap.getAllSiteMapItems().stream()\r\n            \
+    \        .filter({ siteMapItem -> siteMapItem.relativeContentPath == null && siteMapItem.page\
+    \ != null })\r\n                    .sorted(getReverseDepthComparator())\r\n \
+    \                   .forEach({ siteMapItem ->\r\n                        try {\r\
+    \n                            log.info(\"sitemapitem without relative content\
+    \ path \" + siteMapItem.path)\r\n                            final Node siteBaseNode\
+    \ = getSiteBaseNode()\r\n\r\n                            Node xPageFolder = getOrCreateDeepestXpageFolder(siteBaseNode,\
+    \ PathUtils.normalizePath(siteMapItem.relativeSitemapPath))\r\n              \
+    \              session.save()\r\n\r\n                            final Page currentLandingPage\
+    \ = siteMapItem.page\r\n                            final String pageTitle = siteMapItem.pageTitle\r\
+    \n                            final Optional<XPage> xPageTemplate = xPages.findXPageTemplateByPage(currentLandingPage)\r\
+    \n\r\n                            if (xPageFolder != null && xPageTemplate.isPresent())\
+    \ {\r\n                                final List<ManageableComponent> currentLandingPageManageableComponents\
+    \ = currentLandingPage.getAllManageableComponents()\r\n                      \
+    \          Node handleNode\r\n\r\n                                def xPageTemplateItem\
+    \ = xPageTemplate.get()\r\n\r\n                                if (!xPageFolder.hasNode(siteMapItem.name))\
+    \ {\r\n                                    log.info(\"trying to add document..\"\
+    )\r\n                                    log.info(xPageFolder.getPath())\r\n\r\
+    \n                                    FolderWorkflow folderWorkflow = getFolderWorkflow(xPageFolder)\r\
+    \n                                    log.info(\"folderworkflow is looking good\"\
+    )\r\n\r\n                                    final Node xPageTemplateNode = hstConfigNode.getNode(\"\
+    hst:xpages\").getNode(xPageTemplateItem.name)\r\n                            \
+    \        HstNode xpageNode = new HstNodeImpl(xPageTemplateNode, null)\r\n\r\n\
+    \                                    final JcrTemplateNode xPageLaoutAsJcrTemplate\
+    \ = JcrTemplateNodeConverter.getXPageLaoutAsJcrTemplate(xpageNode)\r\n       \
+    \                             log.info(\"preparing the xpage template\")\r\n\r\
+    \n                                    final String newDocument = folderWorkflow.add(\"\
+    new-document\", defaultXpageDocType, siteMapItem.name, xPageLaoutAsJcrTemplate)\r\
+    \n                                    log.info(\"added document\" + newDocument)\r\
+    \n\r\n                                    handleNode = session.getNode(newDocument).getParent()\r\
+    \n                                    log.debug(\"handleNode: \" + handleNode)\r\
+    \n                                    DocumentWorkflow documentWorkflow = getDocumentWorflow(handleNode)\r\
+    \n                                    resetDocumentThroughWorkflow(documentWorkflow)\r\
+    \n                                } else if (xPageFolder.getNode(siteMapItem.name).isNodeType(\"\
+    hippostd:folder\")) {\r\n                                    log.info(\"folder\
+    \ exists! returning existing document\")\r\n                                 \
+    \   xPageFolder = xPageFolder.getNode(siteMapItem.name)\r\n                  \
+    \                  FolderWorkflow folderWorkflow = getFolderWorkflow(xPageFolder)\r\
+    \n                                    log.info(\"folderworkflow is looking good\"\
+    )\r\n                                    final Node xPageTemplateNode = hstConfigNode.getNode(\"\
+    hst:xpages\").getNode(xPageTemplateItem.name)\r\n                            \
+    \        HstNode xpageNode = new HstNodeImpl(xPageTemplateNode, null)\r\n    \
+    \                                final JcrTemplateNode xPageLaoutAsJcrTemplate\
+    \ = JcrTemplateNodeConverter.getXPageLaoutAsJcrTemplate(xpageNode)\r\n       \
+    \                             log.info(\"preparing the xpage template\")\r\n \
+    \                                   final String newDocument = folderWorkflow.add(\"\
+    new-document\", defaultXpageDocType, \"index\", xPageLaoutAsJcrTemplate)\r\n \
+    \                                   log.info(\"added document\" + newDocument)\r\
+    \n                                    handleNode = session.getNode(newDocument).getParent()\r\
+    \n                                    DocumentWorkflow documentWorkflow = getDocumentWorflow(handleNode)\r\
+    \n                                    resetDocumentThroughWorkflow(documentWorkflow)\r\
+    \n                                } else if (xPageFolder.getNode(siteMapItem.name).isNodeType(\"\
+    hippo:handle\")) {\r\n                                    handleNode = xPageFolder.getNode(siteMapItem.name)\r\
+    \n                                    DocumentWorkflow documentWorkflow = getDocumentWorflow(handleNode)\r\
+    \n                                    resetDocumentThroughWorkflow(documentWorkflow)\r\
+    \n                                }\r\n\r\n                                applyXpageToDocument(handleNode,\
+    \ currentLandingPageManageableComponents, xPageTemplateItem, pageTitle)\r\n\r\n\
+    \                                //cleanup sitemap item reference to component\
+    \ configuration id\r\n                                if (session.nodeExists(siteMapItem.path))\
+    \ {\r\n                                    log.info(\"cleaning up sitemap item\"\
+    )\r\n                                    Node siteMapItemNode = session.getNode(siteMapItem.path)\r\
+    \n                                    if (!siteMapItemNode.getNodes().hasNext())\
+    \ {\r\n                                        log.info(\"node has sub nodes so\
+    \ it will be removed\")\r\n                                        siteMapItemNode.remove()\r\
+    \n                                    } else {\r\n                           \
+    \             log.info(\"cannot remove node because it has subnodes, will need\
+    \ to a custom relative content path\")\r\n                                   \
+    \     if (siteMapItemNode.hasProperty(\"hst:componentconfigurationid\")) {\r\n\
+    \                                            siteMapItemNode.getProperty(\"hst:componentconfigurationid\"\
+    ).remove()\r\n                                        }\r\n                  \
+    \                      siteMapItemNode.setProperty(\"hst:relativecontentpath\"\
+    , PathUtils.normalizePath(handleNode.getPath().replace(siteBaseNode.getPath(),\
+    \ \"\")))\r\n                                    }\r\n                       \
+    \         }\r\n\r\n                                if (session.nodeExists(currentLandingPage.path))\
+    \ {\r\n                                    log.info(\"cleaning up workspace page:\
+    \ \" + currentLandingPage.path)\r\n                                    session.getNode(currentLandingPage.path).remove()\r\
+    \n                                }\r\n                                log.info(\"\
+    updated:\" + siteMapItem.path)\r\n                            }\r\n          \
+    \              } catch (RepositoryException | RemoteException | WorkflowException\
+    \ e) {\r\n                            log.error(\"error in step 4, it could be\
+    \ that the workflow did not have access to the intermediate folders, please run\
+    \ script again\", e)\r\n                        }\r\n                    })\r\n\
+    \            log.info(\"Step 4 - end\")\r\n        }\r\n\r\n    }\r\n\r\n\r\n\
+    \    private class SiteMap {\r\n\r\n        List<SiteMapItem> siteMapItems = new\
+    \ ArrayList<>()\r\n        Workspace workspace\r\n        HstConfiguration hstConfiguration\r\
+    \n        String path\r\n\r\n        SiteMap(Workspace workspace, Node node) throws\
+    \ RepositoryException {\r\n            this.workspace = workspace\r\n        \
+    \    init(node)\r\n        }\r\n\r\n        SiteMap(HstConfiguration hstConfiguration,\
+    \ Node node) throws RepositoryException {\r\n            this.hstConfiguration\
+    \ = hstConfiguration\r\n            init(node)\r\n        }\r\n\r\n        void\
+    \ init(Node node) throws RepositoryException {\r\n            this.path = node.getPath()\r\
+    \n            final NodeIterator it = node.getNodes()\r\n            while (it.hasNext())\
+    \ {\r\n                final Node siteMapItemNode = it.nextNode()\r\n        \
+    \        SiteMapItem siteMapItem = new SiteMapItem(this, siteMapItemNode)\r\n\
+    \                siteMapItems.add(siteMapItem)\r\n            }\r\n        }\r\
+    \n\r\n        List<SiteMapItem> getAllSiteMapItems() {\r\n            return siteMapItems.stream()\r\
+    \n                    .flatMap(new Function<SiteMapItem, Stream<? extends SiteMapItem>>()\
+    \ {\r\n                        @Override\r\n                        Stream<? extends\
+    \ SiteMapItem> apply(final SiteMapItem siteMapItem) {\r\n                    \
+    \        return siteMapItem.flattened()\r\n                        }\r\n     \
+    \               })\r\n                    .collect(Collectors.toList())\r\n  \
+    \      }\r\n\r\n        @Override\r\n        String toString() {\r\n         \
+    \   return \"SiteMap{\" +\r\n                    \"siteMapItems=\" + siteMapItems\
+    \ +\r\n                    \", path='\" + path + '\\'' +\r\n                 \
+    \   '}'\r\n        }\r\n    }\r\n\r\n    private class SiteMapItem implements\
+    \ ToNode {\r\n\r\n        Map<String, Property> propertyMap = new HashMap<>()\r\
+    \n        List<SiteMapItem> siteMapItems = new ArrayList<>()\r\n        String\
+    \ relativeContentPath\r\n        String name\r\n        String pageTitle\r\n \
+    \       Page page\r\n        SiteMap siteMap\r\n        Node documentHandle\r\n\
+    \        String relativeSitemapPath\r\n        String path\r\n        int depth\r\
+    \n        boolean isWildcard\r\n        List<String> ignoreWithName = Arrays.asList(\"\
+    _default_\", \"_index_\", \"_any_\")\r\n        boolean xPageSiteMapItem\r\n\r\
+    \n        SiteMapItem(String name, String relativeContentPath) {\r\n         \
+    \   this.name = name\r\n            this.relativeContentPath = relativeContentPath\r\
+    \n            this.xPageSiteMapItem = true\r\n        }\r\n\r\n        SiteMapItem(SiteMap\
+    \ siteMap, Node node) throws RepositoryException {\r\n            if (node.hasProperty(\"\
+    hst:relativecontentpath\")) {\r\n                log.info(\"Relative content path\
+    \ \" + node.getProperty(\"hst:relativecontentpath\").getString())\r\n        \
+    \        node.setProperty(\"hst:relativecontentpath\", node.getProperty(\"hst:relativecontentpath\"\
+    ).getString().replaceAll(\"^/\", \"\"))\r\n            }\r\n\r\n            this.name\
+    \ = node.getName()\r\n            this.isWildcard = ignoreWithName.stream().filter({\
+    \ pattern -> name.contains(pattern) }).findAny().isPresent()\r\n            this.path\
+    \ = node.getPath()\r\n            final String siteMapPath = siteMap.path\r\n\
+    \            this.relativeSitemapPath = path.replace(siteMapPath, \"\")\r\n  \
+    \          this.depth = (int) relativeSitemapPath.chars().filter({ ch -> ch ==\
+    \ '/' }).count()\r\n            final PropertyIterator pit = node.getProperties(\"\
+    hst:*\")\r\n            while (pit.hasNext()) {\r\n                final Property\
+    \ property = pit.nextProperty()\r\n                propertyMap.put(property.getName(),\
+    \ property)\r\n            }\r\n            if (propertyMap.containsKey(\"hst:componentconfigurationid\"\
+    )) {\r\n                final Node configurationNode = findClosestConfigurationParentNode(node)\r\
+    \n                final Node pageNode = configurationNode.hasNode(propertyMap.get(\"\
+    hst:componentconfigurationid\").getString()) ? configurationNode.getNode(propertyMap.get(\"\
+    hst:componentconfigurationid\").getString()) : null\r\n                if (pageNode\
+    \ != null) {\r\n                    this.page = new Page(pageNode)\r\n       \
+    \         } else {\r\n                    log.warn(\"Possible invalid sitemapitem\
+    \ component configuration id: \" + node.getPath() + \" page does not exist with:\
+    \ \" + propertyMap.get(\"hst:componentconfigurationid\").getString() + \" might\
+    \ be inherited!\")\r\n                }\r\n            }\r\n            if (propertyMap.containsKey(\"\
+    hst:relativecontentpath\")) {\r\n                this.relativeContentPath = propertyMap.get(\"\
+    hst:relativecontentpath\").getString()\r\n                final Node siteBaseNode\
+    \ = siteMap.workspace != null ? siteMap.workspace.hstConfiguration.getSiteBaseNode()\
+    \ : siteMap.hstConfiguration.getSiteBaseNode()\r\n                if (siteBaseNode.hasNode(relativeContentPath))\
+    \ {\r\n                    documentHandle = siteBaseNode.getNode(relativeContentPath)\r\
+    \n                }\r\n            }\r\n            if (propertyMap.containsKey(\"\
+    hst:pagetitle\")) {\r\n                this.pageTitle = propertyMap.get(\"hst:pagetitle\"\
+    ).getString()\r\n            }\r\n            final NodeIterator it = node.getNodes()\r\
+    \n            while (it.hasNext()) {\r\n                final Node sitemapItemNode\
+    \ = it.nextNode()\r\n                SiteMapItem siteMapItem = new SiteMapItem(siteMap,\
+    \ sitemapItemNode)\r\n                siteMapItems.add(siteMapItem)\r\n      \
+    \      }\r\n\r\n        }\r\n\r\n        Stream<SiteMapItem> flattened() {\r\n\
+    \            return Stream.concat(\r\n                    Stream.of(this),\r\n\
+    \                    siteMapItems.stream().flatMap(new Function<SiteMapItem, Stream<?\
+    \ extends SiteMapItem>>() {\r\n                        @Override\r\n         \
+    \               Stream<? extends SiteMapItem> apply(final SiteMapItem siteMapItem)\
+    \ {\r\n                            return siteMapItem.flattened()\r\n        \
+    \                }\r\n                    }))\r\n        }\r\n\r\n        Node\
+    \ findClosestConfigurationParentNode(Node node) throws RepositoryException {\r\
+    \n            if (node.isNodeType(\"hst:workspace\") || node.isNodeType(\"hst:configuration\"\
+    )) {\r\n                return node\r\n            }\r\n            return findClosestConfigurationParentNode(node.getParent())\r\
+    \n        }\r\n\r\n        @Override\r\n        String toString() {\r\n      \
+    \      return \"SiteMapItem{\" +\r\n                    \"relativeContentPath='\"\
+    \ + relativeContentPath + '\\'' +\r\n                    \", name='\" + name +\
+    \ '\\'' +\r\n                    \", path='\" + path + '\\'' +\r\n           \
+    \         \", depth=\" + depth +\r\n                    \", isWildcard=\" + isWildcard\
+    \ +\r\n                    \", xPageSiteMapItem=\" + xPageSiteMapItem +\r\n  \
+    \                  \", pageTitle=\" + pageTitle +\r\n                    '}'\r\
+    \n        }\r\n\r\n        @Override\r\n        void toNode(final Node container)\
+    \ throws RepositoryException {\r\n            Node currentSiteMapItem\r\n    \
+    \        if (container.hasNode(name)) {\r\n                currentSiteMapItem\
+    \ = container.getNode(name)\r\n            } else {\r\n                currentSiteMapItem\
+    \ = container.addNode(name, \"hst:sitemapitem\")\r\n            }\r\n        \
+    \    if (relativeContentPath != null) {\r\n                currentSiteMapItem.setProperty(\"\
+    hst:relativecontentpath\", relativeContentPath)\r\n            }\r\n         \
+    \   siteMapItems.forEach({ siteMapItem ->\r\n                try {\r\n       \
+    \             log.info(\"iterating children of sitemap: \" + currentSiteMapItem.getPath())\r\
+    \n                    siteMapItem.toNode(currentSiteMapItem)\r\n             \
+    \   } catch (RepositoryException e) {\r\n                    log.error(\"error...\"\
+    , e)\r\n                }\r\n            })\r\n        }\r\n\r\n    }\r\n\r\n\
+    \    private class Workspace {\r\n\r\n        HstConfiguration hstConfiguration\r\
+    \n        SiteMap siteMap\r\n        Pages pages\r\n\r\n        Workspace(HstConfiguration\
+    \ hstConfiguration, Node node) throws RepositoryException {\r\n            this.hstConfiguration\
+    \ = hstConfiguration\r\n            this.siteMap = node.hasNode(\"hst:sitemap\"\
+    ) ? new SiteMap(this, node.getNode(\"hst:sitemap\")) : null\r\n            this.pages\
+    \ = node.hasNode(\"hst:pages\") ? new Pages(this, node.getNode(\"hst:pages\"))\
+    \ : null\r\n        }\r\n    }\r\n\r\n    private class Page extends AbstractComponent\
+    \ {\r\n\r\n        Page(final Node node) throws RepositoryException {\r\n    \
+    \        super(node)\r\n        }\r\n\r\n        @Override\r\n        void toNode(final\
+    \ Node container) throws RepositoryException {\r\n            final Node page\
+    \ = container.addNode(name, \"hst:page\")\r\n            addToNode(page)\r\n \
+    \       }\r\n\r\n        List<ManageableComponent> getAllManageableComponents()\
+    \ {\r\n            final List<ManageableComponent> collect = flattened()\r\n \
+    \                   .filter({ component -> component instanceof ManageableComponent\
+    \ })\r\n                    .map({ component -> (ManageableComponent) component\
+    \ })\r\n                    .collect(Collectors.toList())\r\n            return\
+    \ collect\r\n        }\r\n\r\n\r\n        @Override\r\n        String toString()\
+    \ {\r\n            return \"Page{\" +\r\n                    \"staticComponents=\"\
+    \ + staticComponents +\r\n                    \", manageableComponents=\" + manageableComponents\
+    \ +\r\n                    '}'\r\n        }\r\n    }\r\n\r\n    private class\
+    \ Pages {\r\n\r\n        List<Page> pages = new ArrayList<>()\r\n\r\n        Pages(final\
+    \ Workspace workspace, Node node) throws RepositoryException {\r\n           \
+    \ init(node)\r\n        }\r\n\r\n        Pages(final HstConfiguration hstConfiguration,\
+    \ Node node) throws RepositoryException {\r\n            init(node)\r\n      \
+    \  }\r\n\r\n        void init(Node node) throws RepositoryException {\r\n    \
+    \        final NodeIterator it = node.getNodes()\r\n            while (it.hasNext())\
+    \ {\r\n                final Node pageNode = it.nextNode()\r\n               \
+    \ Page page = new Page(pageNode)\r\n                pages.add(page)\r\n      \
+    \      }\r\n        }\r\n    }\r\n\r\n    private class ProtoTypePage extends\
+    \ AbstractComponent {\r\n\r\n        final String displayName\r\n\r\n        ProtoTypePage(Node\
+    \ protoTypePage) throws RepositoryException {\r\n            super(protoTypePage)\r\
+    \n            this.displayName = protoTypePage.isNodeType(\"hst:prototypemeta\"\
+    ) && protoTypePage.hasProperty(\"hst:displayname\") ? protoTypePage.getProperty(\"\
+    hst:displayname\").getString() : null\r\n        }\r\n\r\n        List<ManageableComponent>\
+    \ getAllManageableComponents() {\r\n            final List<ManageableComponent>\
+    \ collect = flattened()\r\n                    .filter({ component -> component\
+    \ instanceof ManageableComponent })\r\n                    .map({ component ->\
+    \ (ManageableComponent) component })\r\n                    .collect(Collectors.toList())\r\
+    \n            return collect\r\n        }\r\n\r\n        @Override\r\n       \
+    \ String toString() {\r\n            return \"ProtoTypePage{\" +\r\n         \
+    \           \"name='\" + name + '\\'' +\r\n                    \", staticComponents=\"\
+    \ + staticComponents +\r\n                    \", manageableComponents=\" + manageableComponents\
+    \ +\r\n                    '}'\r\n        }\r\n\r\n        @Override\r\n     \
+    \   void toNode(final Node Container) {\r\n            //empty not creating any\
+    \ prototype pages!\r\n        }\r\n    }\r\n\r\n    private class XPage extends\
+    \ AbstractComponent {\r\n\r\n        String label\r\n        String pageRef\r\n\
+    \r\n        XPage(Node node) throws RepositoryException {\r\n            super(node)\r\
+    \n            this.label = node.hasProperty(\"hst:label\") ? node.getProperty(\"\
+    hst:label\").getString() : null\r\n            this.pageRef = node.hasProperty(\"\
+    hst:pageref\") ? node.getProperty(\"hst:pageref\").getString() : null\r\n    \
+    \    }\r\n\r\n        XPage(ProtoTypePage protoTypePage) {\r\n            super(protoTypePage)\r\
+    \n            this.label = protoTypePage.displayName\r\n            propertyMap.remove(\"\
+    hst:displayname\")\r\n            propertyMap.remove(\"hst:primarycontainer\"\
+    )\r\n            log.info(\"conversion of prototype page: \" + protoTypePage.name\
+    \ + \" to xpage: \" + name)\r\n        }\r\n\r\n        void toNode(Node container)\
+    \ throws RepositoryException {\r\n            if (container.hasNode(name)) {\r\
+    \n                container.getNode(name).remove()\r\n            }\r\n      \
+    \      final Node xPageNode = container.addNode(name, \"hst:xpage\")\r\n     \
+    \       addToNode(xPageNode)\r\n            log.info(\"creating node structure\
+    \ of xpage: \" + name)\r\n        }\r\n\r\n        @Override\r\n        Node addToNode(final\
+    \ Node node) throws RepositoryException {\r\n            Node added = super.addToNode(node)\r\
+    \n            if (label != null) {\r\n                added.setProperty(\"hst:label\"\
+    , label)\r\n            }\r\n            if (pageRef != null) {\r\n          \
+    \      added.setProperty(\"hst:pageref\", pageRef)\r\n            }\r\n      \
+    \      if (!manageableComponents.isEmpty()) {\r\n                manageableComponents.forEach({\
+    \ manageableComponent ->\r\n                    try {\r\n                    \
+    \    manageableComponent.toNode(added)\r\n                    } catch (RepositoryException\
+    \ e) {\r\n                        log.error(\"error...\", e)\r\n             \
+    \       }\r\n                })\r\n            }\r\n            return added\r\
+    \n        }\r\n\r\n        @Override\r\n        String toString() {\r\n      \
+    \      return \"Page{\" +\r\n                    \"staticComponents=\" + staticComponents\
+    \ +\r\n                    \", manageableComponents=\" + manageableComponents\
+    \ +\r\n                    '}'\r\n        }\r\n    }\r\n\r\n    private abstract\
+    \ class AbstractComponent implements ToNode {\r\n\r\n        String name\r\n \
+    \       String path\r\n        List<StaticComponent> staticComponents = new ArrayList<>()\r\
+    \n        List<ManageableComponent> manageableComponents = new ArrayList<>()\r\
+    \n        Map<String, Property> propertyMap = new HashMap<>()\r\n        List<String>\
+    \ ignoreWithName = Arrays.asList(\"hst:lastmodified\")\r\n\r\n        AbstractComponent(AbstractComponent\
+    \ component) {\r\n            name = component.name\r\n            staticComponents\
+    \ = component.staticComponents\r\n            manageableComponents = component.manageableComponents\r\
+    \n            propertyMap = component.propertyMap\r\n        }\r\n\r\n       \
+    \ AbstractComponent(Node node) throws RepositoryException {\r\n            final\
+    \ PropertyIterator pit = node.getProperties(\"hst:*\")\r\n            while (pit.hasNext())\
+    \ {\r\n                final Property property = pit.nextProperty()\r\n      \
+    \          propertyMap.put(property.getName(), property)\r\n            }\r\n\
+    \            this.name = node.getName()\r\n            this.path = node.getPath()\r\
+    \n            final NodeIterator it = node.getNodes()\r\n            while (it.hasNext())\
+    \ {\r\n                final Node component = it.nextNode()\r\n              \
+    \  if (component.isNodeType(\"hst:component\")) {\r\n                    StaticComponent\
+    \ staticComponent = new StaticComponent(component)\r\n                    staticComponents.add(staticComponent)\r\
+    \n                } else if (component.isNodeType(\"hst:containercomponent\"))\
+    \ {\r\n                    ManageableComponent manageableComponent = new ManageableComponent(component)\r\
+    \n                    manageableComponents.add(manageableComponent)\r\n      \
+    \          }\r\n            }\r\n        }\r\n\r\n        Stream<AbstractComponent>\
+    \ flattened() {\r\n            return Stream.concat(\r\n                    Stream.concat(Stream.of(this),\r\
+    \n                            manageableComponents.stream().flatMap({ manageableComponent\
+    \ -> manageableComponent.flattened() })),\r\n                    Stream.concat(Stream.of(this),\r\
+    \n                            staticComponents.stream().flatMap({ staticComponent\
+    \ -> staticComponent.flattened() })))\r\n        }\r\n\r\n        void setName(final\
+    \ String name) {\r\n            this.name = name\r\n        }\r\n\r\n        Node\
+    \ addToNode(Node node) throws RepositoryException {\r\n            propertyMap.forEach({\
+    \ propertyName, property ->\r\n                try {\r\n                    if\
+    \ (property.isMultiple()) {\r\n                        node.setProperty(propertyName,\
+    \ property.getValues())\r\n                    } else {\r\n                  \
+    \      node.setProperty(propertyName, property.getValue())\r\n               \
+    \     }\r\n                } catch (RepositoryException e) {\r\n             \
+    \       log.error(\"error while adding hst properties to the node\", e)\r\n  \
+    \              }\r\n            })\r\n            if (!staticComponents.isEmpty())\
+    \ {\r\n                staticComponents.forEach({ staticComponent ->\r\n     \
+    \               try {\r\n                        staticComponent.toNode(node)\r\
+    \n                    } catch (RepositoryException e) {\r\n                  \
+    \      log.error(e.getLocalizedMessage(), e)\r\n                    }\r\n    \
+    \            })\r\n            }\r\n            if (!manageableComponents.isEmpty())\
+    \ {\r\n                manageableComponents.forEach({ manageableComponent ->\r\
+    \n                    try {\r\n                        manageableComponent.toNode(node)\r\
+    \n                    } catch (RepositoryException e) {\r\n                  \
+    \      log.error(e.getLocalizedMessage(), e)\r\n                    }\r\n    \
+    \            })\r\n            }\r\n            return node\r\n        }\r\n\r\
+    \n        String propertyMapToString() {\r\n            return propertyMap.entrySet().stream()\r\
+    \n                    .filter({ propertyEntry -> !ignoreWithName.contains(propertyEntry.getKey())\
+    \ })\r\n                    .map({ stringPropertyEntry ->\r\n                \
+    \        final Property property = stringPropertyEntry.getValue()\r\n        \
+    \                String stringValue\r\n                        if (property.isMultiple())\
+    \ {\r\n                            stringValue = Stream.of(property.getValues()).map({\
+    \ value -> value.getString() })\r\n                                    .collect(Collectors.joining(\"\
+    , \", \"{\", \"}\"))\r\n                        } else {\r\n                 \
+    \           stringValue = property.getValue().getString()\r\n                \
+    \        }\r\n                        return stringPropertyEntry.getKey() + \"\
+    =\" + stringValue\r\n                    })\r\n                    .collect(Collectors.joining(\"\
+    , \", \"{\", \"}\"))\r\n        }\r\n\r\n        @Override\r\n        String toString()\
+    \ {\r\n            return \"AbstractComponent{\" +\r\n                    \"name='\"\
+    \ + name + '\\'' +\r\n                    \"properties='\" + propertyMapToString()\
+    \ + '\\'' +\r\n                    \", staticComponents=\" + staticComponents\
+    \ +\r\n                    \", manageableComponents=\" + manageableComponents\
+    \ +\r\n                    '}'\r\n        }\r\n    }\r\n\r\n    private class\
+    \ XPages {\r\n\r\n        final Map<String, XPage> xPages = new HashMap<>()\r\n\
+    \        final Node xPagesContainerNode\r\n\r\n        XPages(Node container)\
+    \ throws RepositoryException {\r\n            this.xPagesContainerNode = container\r\
+    \n            final NodeIterator it = container.getNodes()\r\n            while\
+    \ (it.hasNext()) {\r\n                final Node xPage = it.nextNode()\r\n   \
+    \             if (xPage.isNodeType(\"hst:xpage\")) {\r\n                    XPage\
+    \ page = new XPage(xPage)\r\n                    xPages.put(xPage.getName(), page)\r\
+    \n                }\r\n            }\r\n        }\r\n\r\n        Optional<XPage>\
+    \ findXPageTemplateByPage(Page page) {\r\n            final String pageIdentifier\
+    \ = page.toString()\r\n            final Optional<XPage> first = xPages.values().stream()\r\
+    \n                    .filter({ xPage ->\r\n                        (pageIdentifier\
+    \ == xPage.toString())\r\n                    })\r\n                    .findFirst()\r\
+    \n            return first\r\n        }\r\n\r\n        Map<String, XPage> getXPages()\
+    \ {\r\n            return xPages\r\n        }\r\n\r\n        void createXPagesFromPrototypePages()\
+    \ {\r\n            getXPages().values().stream().forEach({ xPage ->\r\n      \
+    \          try {\r\n                    xPage.toNode(xPagesContainerNode)\r\n\
+    \                    log.info(\"persisting xpage \" + xPage.name + \" to JCR repository\"\
+    )\r\n                } catch (RepositoryException e) {\r\n                   \
+    \ log.error(\"Error persisting xpathe to JCR repository\", e)\r\n            \
+    \    }\r\n            })\r\n            log.info(\"Done persisting all xpages\
+    \ to the JCR repository\")\r\n        }\r\n    }\r\n\r\n    private class ProtoTypePages\
+    \ {\r\n\r\n        final List<ProtoTypePage> protoTypePages = new ArrayList<>()\r\
+    \n\r\n        ProtoTypePages(Node container) throws RepositoryException {\r\n\
+    \            final NodeIterator it = container.getNodes()\r\n            while\
+    \ (it.hasNext()) {\r\n                final Node protoTypePage = it.nextNode()\r\
+    \n                if (protoTypePage.isNodeType(\"hst:component\")) {\r\n     \
+    \               ProtoTypePage page = new ProtoTypePage(protoTypePage)\r\n    \
+    \                protoTypePages.add(page)\r\n                }\r\n           \
+    \ }\r\n        }\r\n\r\n        List<ProtoTypePage> getProtoTypePages() {\r\n\
+    \            return protoTypePages\r\n        }\r\n    }\r\n\r\n    private class\
+    \ StaticComponent extends AbstractComponent implements ToNode {\r\n\r\n      \
+    \  StaticComponent(Node node) throws RepositoryException {\r\n            super(node)\r\
+    \n        }\r\n\r\n        @Override\r\n        String toString() {\r\n      \
+    \      return \"StaticComponent{\" +\r\n                    \"name='\" + name\
+    \ + '\\'' +\r\n                    \", properties='\" + propertyMapToString()\
+    \ + '\\'' +\r\n                    \", staticComponents=\" + staticComponents\
+    \ +\r\n                    \", manageableComponents=\" + manageableComponents\
+    \ +\r\n                    '}'\r\n        }\r\n\r\n        @Override\r\n     \
+    \   void toNode(final Node container) throws RepositoryException {\r\n       \
+    \     if (container.hasNode(name)) {\r\n                container.getNode(name).remove()\r\
+    \n            }\r\n            final Node node = container.addNode(name, \"hst:component\"\
+    )\r\n            addToNode(node)\r\n        }\r\n    }\r\n\r\n    private class\
+    \ DynamicComponent extends AbstractComponent {\r\n\r\n        DynamicComponent(final\
+    \ Node node) throws RepositoryException {\r\n            super(node)\r\n     \
+    \   }\r\n\r\n        @Override\r\n        void toNode(final Node container) throws\
+    \ RepositoryException {\r\n            if (container.hasNode(name)) {\r\n    \
+    \            container.getNode(name).remove()\r\n            }\r\n           \
+    \ final Node node = container.addNode(name, \"hst:containeritemcomponent\")\r\n\
+    \            addToNode(node)\r\n        }\r\n    }\r\n\r\n    private class ManageableComponent\
+    \ extends AbstractComponent {\r\n\r\n        String identifier\r\n        List<DynamicComponent>\
+    \ dynamicComponents = new ArrayList<>()\r\n\r\n        ManageableComponent(Node\
+    \ node) throws RepositoryException {\r\n            super(node)\r\n          \
+    \  this.identifier = node.hasProperty(\"hippo:identifier\") ? node.getProperty(\"\
+    hippo:identifier\").getString() : null\r\n            final NodeIterator it =\
+    \ node.getNodes()\r\n            while (it.hasNext()) {\r\n                final\
+    \ Node dynamicComponentNode = it.nextNode()\r\n                if (dynamicComponentNode.isNodeType(\"\
+    hst:containeritemcomponent\")) {\r\n                    DynamicComponent dynamicComponent\
+    \ = new DynamicComponent(dynamicComponentNode)\r\n                    dynamicComponents.add(dynamicComponent)\r\
+    \n                }\r\n            }\r\n        }\r\n\r\n        ManageableComponent(ManageableComponent\
+    \ manageableComponent) {\r\n            super(manageableComponent)\r\n       \
+    \     this.dynamicComponents = manageableComponent.dynamicComponents\r\n     \
+    \   }\r\n\r\n        @Override\r\n        String toString() {\r\n            return\
+    \ \"ManageableComponent{\" +\r\n                    \"name='\" + name + '\\''\
+    \ +\r\n                    \", properties='\" + propertyMapToString() + '\\''\
+    \ +\r\n                    \", identifier='\" + identifier + '\\'' +\r\n     \
+    \               '}'\r\n        }\r\n\r\n        @Override\r\n        void toNode(final\
+    \ Node container) throws RepositoryException {\r\n            if (container.hasNode(name))\
+    \ {\r\n                container.getNode(name).remove()\r\n            }\r\n \
+    \           final Node node = container.addNode(name, \"hst:containercomponent\"\
+    )\r\n            addToNode(node)\r\n            if (identifier != null) {\r\n\
+    \                node.setProperty(\"hippo:identifier\", identifier)\r\n      \
+    \      }\r\n            if (!dynamicComponents.isEmpty()) {\r\n              \
+    \  dynamicComponents.forEach({ dynamicComponent ->\r\n                    try\
+    \ {\r\n                        dynamicComponent.toNode(node)\r\n             \
+    \       } catch (RepositoryException e) {\r\n                        log.error(\"\
+    error..\", e)\r\n                    }\r\n                })\r\n            }\r\
+    \n        }\r\n    }\r\n\r\n\r\n}"
+  hipposys:throttle: 1000

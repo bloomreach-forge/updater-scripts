@@ -1,0 +1,18 @@
+/hst:hst/hst:configurations/myproject/hst:workspace/hst:pages/foolv1-contentpage:
+  jcr:primaryType: hst:component
+  hst:lastmodified: 2020-10-19T16:56:10.180+02:00
+  hst:referencecomponent: hst:abstractpages/base
+  /main:
+    jcr:primaryType: hst:containercomponent
+    hippo:identifier: 137bca1b-9e9f-4a42-8dc6-8ebe111497da
+    hst:label: Content Page Main
+    hst:lastmodified: 2020-10-19T16:57:08.086+02:00
+    hst:xtype: hst.vbox
+    /banner:
+      jcr:primaryType: hst:containeritemcomponent
+      hst:componentclassname: org.onehippo.cms7.essentials.components.EssentialsBannerComponent
+      hst:iconpath: images/essentials/catalog-component-icons/banner.svg
+      hst:label: Banner
+      hst:parameternames: [document, org.hippoecm.hst.core.component.template]
+      hst:parametervalues: [banners/banner1, 'webfile:/freemarker/hstdefault/essentials-banner.ftl']
+      hst:template: essentials-banner
