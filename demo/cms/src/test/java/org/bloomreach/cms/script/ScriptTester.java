@@ -8,19 +8,18 @@ import javax.jcr.query.Query;
 
 import org.hippoecm.repository.HippoRepository;
 import org.hippoecm.repository.HippoRepositoryFactory;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 //import org.bloomreach.cms.scripts.LandingPage2XPageConversionScriptGroovy;
 
-@Ignore
+@Disabled
 public class ScriptTester {
 
     private static final Logger log = LoggerFactory.getLogger(ScriptTester.class);
 
-    @Test
+    @Disabled
     public void testReset() throws RepositoryException {
         HippoRepository repository = HippoRepositoryFactory.getHippoRepository("rmi://localhost:1099/hipporepository");
         Session session = repository.login("admin", "admin".toCharArray());
@@ -62,7 +61,7 @@ public class ScriptTester {
     }
 
 
-//    @Test
+//    @Disabled
 //    public void testLandingPage2XPageConversionScript() throws RepositoryException {
 //        HippoRepository repository = HippoRepositoryFactory.getHippoRepository("rmi://localhost:1099/hipporepository");
 //        Session session = repository.login("admin", "admin".toCharArray());
