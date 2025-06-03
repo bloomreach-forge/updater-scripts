@@ -11,9 +11,8 @@ definitions:
         /content:
           jcr:primaryType: hst:component
           hst:template: two-columns.main.content
-          hst:componentclassname: test123
-          hst:parameternames: [test123, '456']
-          hst:parametervalues: [qwertt123]
+          hst:parameternames: []
+          hst:parametervalues: []
           /left-container:
             jcr:primaryType: hst:containercomponent
             hippo:identifier: ac851139-de1a-485d-a3b4-96d28e538de7
