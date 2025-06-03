@@ -5,7 +5,7 @@
   <parent>
     <groupId>com.onehippo.cms7</groupId>
     <artifactId>hippo-cms7-enterprise-release</artifactId>
-    <version>15.7.2</version>
+    <version>16.3.1</version>
   </parent>
 
   <name>My Project</name>
@@ -61,9 +61,7 @@
     <!--***START temporary override of versions*** -->
     <!-- ***END temporary override of versions*** -->
 
-    <essentials.version>15.7.2</essentials.version>
-    <jsp-api.version>2.2</jsp-api.version>
-    <taglibs.version>1.2.5</taglibs.version>
+    <essentials.version>16.3.1</essentials.version>
 
     <development-module-deploy-dir>shared/lib</development-module-deploy-dir>
 
@@ -75,42 +73,39 @@
 
   <repositories>
     <repository>
-      <id>hippo</id>
-      <name>Hippo maven 2 repository.</name>
-      <url>https://maven.onehippo.com/maven2/</url>
+      <id>bloomreach-maven2</id>
+      <name>Bloomreach Maven 2</name>
+      <url>https://maven.bloomreach.com/repository/maven2</url>
     </repository>
     <repository>
       <releases>
         <updatePolicy>never</updatePolicy>
         <checksumPolicy>fail</checksumPolicy>
       </releases>
-      <id>hippo-maven2-enterprise</id>
-      <name>Hippo Enterprise Maven 2</name>
-      <url>https://maven.onehippo.com/maven2-enterprise</url>
+      <id>bloomreach-maven2-enterprise</id>
+      <name>Bloomreach Maven 2 Enterprise</name>
+      <url>https://maven.bloomreach.com/repository/maven2-enterprise</url>
     </repository>
   </repositories>
 
   <dependencyManagement>
     <dependencies>
       <dependency>
-        <groupId>javax.servlet.jsp</groupId>
-        <artifactId>jsp-api</artifactId>
-        <version>${jsp-api.version}</version>
+        <groupId>jakarta.servlet.jsp</groupId>
+        <artifactId>jakarta.servlet.jsp-api</artifactId>
         <scope>provided</scope>
       </dependency>
 
       <!-- other predefined runtime scope versioned dependencies -->
       <dependency>
-        <groupId>org.apache.taglibs</groupId>
-        <artifactId>taglibs-standard-spec</artifactId>
-        <version>${taglibs.version}</version>
+        <groupId>com.bloomreach.xm</groupId>
+        <artifactId>taglibs-standard-spec-jakarta</artifactId>
         <scope>runtime</scope>
       </dependency>
 
       <dependency>
-        <groupId>org.apache.taglibs</groupId>
-        <artifactId>taglibs-standard-impl</artifactId>
-        <version>${taglibs.version}</version>
+        <groupId>com.bloomreach.xm</groupId>
+        <artifactId>taglibs-standard-impl-jakarta</artifactId>
         <scope>runtime</scope>
       </dependency>
 
@@ -288,8 +283,8 @@
           <scope>compile</scope>
         </dependency>
         <dependency>
-          <groupId>javax.annotation</groupId>
-          <artifactId>javax.annotation-api</artifactId>
+          <groupId>jakarta.annotation</groupId>
+          <artifactId>jakarta.annotation-api</artifactId>
           <scope>compile</scope>
         </dependency>
         <dependency>
@@ -307,7 +302,7 @@
         <plugins>
           <plugin>
             <groupId>org.codehaus.cargo</groupId>
-            <artifactId>cargo-maven2-plugin</artifactId>
+            <artifactId>cargo-maven3-plugin</artifactId>
             <configuration>
               <configuration>
                 <configfiles>
@@ -403,11 +398,6 @@
         <dependency>
           <groupId>jakarta.xml.ws</groupId>
           <artifactId>jakarta.xml.ws-api</artifactId>
-          <scope>provided</scope>
-        </dependency>
-        <dependency>
-          <groupId>javax.annotation</groupId>
-          <artifactId>javax.annotation-api</artifactId>
           <scope>provided</scope>
         </dependency>
         <dependency>
