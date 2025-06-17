@@ -22,31 +22,26 @@ import java.util.stream.Collectors
 import java.util.stream.Stream
 
 /**
- * Convert existing landing page (prototype pages) to experience pages
- *
- * XPath:  hst:{artifactId}/hst:configurations/{configuration}
+ * Script to convert landing pages to XPages in a given HST configuration.
  *
  * Parameters:
- *   hstConfiguration (String)
- *   xPageFolder (String)
- *   defaultXpageDocType (String)
- *   namespace (String)
- *   publishPages (Boolean)
- *
+ * - hstConfiguration: The name of the HST configuration to process.
+ * - xPageFolder: The folder name where XPages will be created (default: "xpages").
+ * - defaultXpageDocType: The document type for the created XPages.
+ * - publishPages: Whether to publish the pages after conversion (default: false).
  */
+
 class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
 
     String hstConfiguration
     String xPageFolder
     String defaultXpageDocType
-    String namespace
-    Boolean publishPages
+    String publishPages
 
     void initialize(Session session) {
         hstConfiguration = (String) parametersMap.get("hstConfiguration")
         xPageFolder = (String) parametersMap.getOrDefault("xPageFolder", "xpages")
         defaultXpageDocType = (String) parametersMap.get("defaultXpageDocType")
-        namespace = (String) parametersMap.get("namespace")
         publishPages = (Boolean) parametersMap.getOrDefault("publishPages", true)
         if (StringUtils.isEmpty(hstConfiguration)) {
             log.error("hstConfiguration property is empty")
@@ -56,16 +51,11 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
             log.error("defaultXpageDocType property is empty")
             throw new RuntimeException("defaultXpageDocType property is empty")
         }
-        if (StringUtils.isEmpty(namespace)) {
-            log.error("namespace property is empty")
-            throw new RuntimeException("namespace property is empty")
-        }
         log.info("starting the landing 2 xpage conversion script with configuration" +
                 " hstConfiguration=" + hstConfiguration +
                 ", xPageFolder=" + xPageFolder +
-                ", defaultXpageDocType=" + defaultXpageDocType) +
-                ", namespace=" + namespace +
-                ", publishPages=" + publishPages
+                ", defaultXpageDocType=" + defaultXpageDocType +
+                ", publishPages=" + publishPages)
     }
 
     @Override
@@ -76,7 +66,7 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
                 while (it.hasNext()) {
                     final Node configuration = it.nextNode()
                     if (configuration.isNodeType("hst:configuration")) {
-                        log.info("Initializing the in-memory channel configurations model")
+                        log.info("Initializing the in-memory channel configuration model")
                         HstConfiguration hstConfig = new HstConfiguration(configuration)
                         hstConfig.startConversion()
                     }
@@ -93,7 +83,7 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
 
 
     interface ToNode {
-        void toNode(Node container) throws RepositoryException
+        void toNode(Node container) throws RepositoryException;
     }
 
     private class HstConfiguration {
@@ -107,11 +97,11 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
         final Node hst
         final Node hstConfigNode
         final Pages pages
-        final Session session
+        final Session session;
 
         HstConfiguration(Node hstConfiguration) throws RepositoryException {
             this.hstConfigNode = hstConfiguration
-            this.session = hstConfigNode.getSession()
+            this.session = hstConfigNode.getSession();
             this.name = hstConfiguration.getName()
             this.path = hstConfiguration.getPath()
             this.hst = hstConfiguration.getParent().getParent()
@@ -120,6 +110,7 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
             this.siteMap = hstConfiguration.hasNode("hst:sitemap") ? new SiteMap(this, hstConfiguration.getNode("hst:sitemap")) : null
             this.xPages = getOrCreateXPages(hstConfiguration)
             this.pages = hstConfiguration.hasNode("hst:pages") ? new Pages(this, hstConfiguration.getNode("hst:pages")) : null
+
         }
 
         private XPages getOrCreateXPages(final Node hstConfiguration) throws RepositoryException {
@@ -144,19 +135,15 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
 
         void startConversion() throws RepositoryException {
             log.info("Starting conversion of landing pages to XPages for " + path)
-            executeStep0()
-            session.save()
-
-            executeStep1()
-            session.save()
-
-            executeStep2()
-            session.save()
-
-            executeStep3()
-            session.save()
-
-            executeStep4()
+            executeStep0();
+            session.save();
+            executeStep1();
+            session.save();
+            executeStep2();
+            session.save();
+            executeStep3();
+            session.save();
+            executeStep4();
             log.info("End conversion of landing pages to XPages for " + path)
             //step5b cleanup all pages which have no reference from the sitemapitems
         }
@@ -165,29 +152,31 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
             return new Comparator<SiteMapItem>() {
                 @Override
                 int compare(final SiteMapItem o1, final SiteMapItem o2) {
-                    return o2.depth <=> o1.depth
+                    return o2.depth <=> o1.depth;
                 }
             }
         }
 
-
         DocumentWorkflow getDocumentWorflow(Node documentHandle) {
-            return (DocumentWorkflow) ((HippoWorkspace) session.getWorkspace()).getWorkflowManager().getWorkflow("default", documentHandle)
+            return (DocumentWorkflow) ((HippoWorkspace) session.getWorkspace()).getWorkflowManager().getWorkflow("default", documentHandle);
         }
 
         FolderWorkflow getFolderWorkflow(Node folder) {
             return (FolderWorkflow) ((HippoWorkspace) session.getWorkspace()).getWorkflowManager().getWorkflow("threepane", folder)
         }
 
-        private void applyXpageToDocument(Node handleNode, documentXpageManageableComponents, xPageByPage, String pageTitle) {
+        private void applyXpageToDocument(Node handleNode, documentXpageManageableComponents, xPageByPage) {
+            log.debug("Starting applyXpageToDocument for handle: " + handleNode.getPath())
             DocumentHandle handle = new DocumentHandle(handleNode)
             handle.initialize()
             final Map<String, DocumentVariant> documents = handle.getDocuments()
+            log.debug("Found " + documents.size() + " document variants")
 
             documents.entrySet()
                     .stream()
                     .filter({ documentVariant -> ("draft" != documentVariant.getKey()) })
                     .forEach({ documentVariant ->
+                        log.debug("Processing document variant: " + documentVariant.getKey())
                         final Node documentNode = documentVariant.getValue().getNode()
                         try {
                             Node xpage
@@ -208,114 +197,124 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
                                 }
                             }
 
-                            log.info("setting ${namespace}:title to sitemap page title: {}", pageTitle)
-                            documentNode.setProperty("${namespace}:title", pageTitle)
+                            log.debug("Starting component processing for document: " + documentNode.getPath())
+                            log.debug("Input manageable components count: " + (documentXpageManageableComponents != null ? documentXpageManageableComponents.size() : 0))
 
                             final List<ManageableComponent> componentList = documentXpageManageableComponents.stream()
                                     .map({ manageableComponent ->
+                                        log.debug("Processing component with identifier: " + manageableComponent.identifier + ", name: " + manageableComponent.name)
                                         final ManageableComponent copy = new ManageableComponent(manageableComponent)
-                                        copy.setName(manageableComponent.identifier)
+                                        String manageableComponentIdentifier = manageableComponent.identifier
+                                        if (manageableComponentIdentifier == null || manageableComponentIdentifier.isEmpty()) {
+                                            log.warn("Component identifier is empty, generating a new UUID")
+                                            manageableComponentIdentifier = UUID.randomUUID().toString()
+                                        }
+                                        copy.setName(manageableComponentIdentifier)
+                                        String oldId = manageableComponentIdentifier
                                         copy.identifier = UUID.randomUUID().toString()
+                                        log.debug("Created copy of component: old id=" + oldId + ", new id=" + copy.identifier + ", name set to: " + copy.name)
                                         return copy
                                     }).collect(Collectors.toList())
+
+                            log.debug("Created " + componentList.size() + " component copies")
+
                             XPage documentXpage = new XPage(xpage)
                             documentXpage.manageableComponents = componentList
                             documentXpage.pageRef = xPageByPage.name
+                            log.debug("Created XPage with pageRef: " + xPageByPage.name + ", assigned " + componentList.size() + " manageable components")
+
+                            log.debug("About to add components to node: " + xpage.getPath())
                             documentXpage.addToNode(xpage)
+                            log.debug("Successfully added XPage components to node: " + xpage.getPath())
                         } catch (RepositoryException e) {
                             log.error("error while trying to convert a landing page to xpage", e)
                         }
                     })
+            log.debug("Completed applyXpageToDocument for handle: " + handleNode.getPath())
         }
 
         Node getOrCreateDeepestXpageFolder(Node siteBaseNode, String path) throws RepositoryException {
-            boolean isTranslated = siteBaseNode.isNodeType("hippotranslation:translated")
-            log.info("base folder is translated: " + isTranslated)
-            String locale = isTranslated ? siteBaseNode.getProperty("hippotranslation:locale").getString() : null
-            Node xPageFolderNode
-            String[] folderType = ['new-document', 'new-folder']
+            boolean isTranslated = siteBaseNode.isNodeType("hippotranslation:translated");
+            log.info("base folder is translated: " + isTranslated);
+            String locale = isTranslated ? siteBaseNode.getProperty("hippotranslation:locale").getString() : null;
+            Node xPageFolderNode;
+            String[] folderType = ['new-document']
             if (siteBaseNode.hasNode(xPageFolder)) {
-                log.info("root xpage folder does exist")
-                xPageFolderNode = siteBaseNode.getNode(xPageFolder)
+                log.info("root xpage folder does exits")
+                xPageFolderNode = siteBaseNode.getNode(xPageFolder);
                 if (!xPageFolderNode.isNodeType("hippostd:folder")) {
                     log.info("removing root xpage folder")
-                    xPageFolderNode.remove()
-                    return getOrCreateDeepestXpageFolder(siteBaseNode, path)
+                    xPageFolderNode.remove();
+                    return getOrCreateDeepestXpageFolder(siteBaseNode, path);
                 }
             } else {
-                log.info("root xpage folder does not exist, creating now..")
-                xPageFolderNode = siteBaseNode.addNode(xPageFolder, "hippostd:folder")
-                xPageFolderNode.setProperty("hippostd:foldertype", folderType)
+                log.info("root xpage folder does not exits, creating now..")
+                xPageFolderNode = siteBaseNode.addNode(xPageFolder, "hippostd:folder");
+                xPageFolderNode.setProperty("hippostd:foldertype", folderType);
             }
 
-            translate(isTranslated, locale, xPageFolderNode)
+            translate(isTranslated, locale, xPageFolderNode);
 
             if (!xPageFolderNode.isNodeType("hippostd:xpagefolder")) {
-                xPageFolderNode.addMixin("hippostd:xpagefolder")
-                xPageFolderNode.addMixin("mix:versionable")
-                xPageFolderNode.setProperty("hippostd:channelid", hstConfiguration)
-                xPageFolderNode.setProperty("hippostd:foldertype", folderType)
+                xPageFolderNode.addMixin("hippostd:xpagefolder");
+                xPageFolderNode.setProperty("hippostd:channelid", hstConfiguration);
             }
 
             if (StringUtils.isNotEmpty(path) && path.contains("/")) {
-                final List<String> paths = new ArrayList<>(Arrays.asList(path.split("/")))
-                paths.remove(paths.size() - 1)
+                final List<String> paths = new ArrayList<>(Arrays.asList(path.split("/")));
+                paths.remove(paths.size() - 1);
                 for (String segment : paths) {
                     if (xPageFolderNode.hasNode(segment)) {
-                        Node temp = xPageFolderNode.getNode(segment)
+                        Node temp = xPageFolderNode.getNode(segment);
                         if (temp.isNodeType("hippostd:folder") && temp.isNodeType("hippostd:xpagefolder")) {
-                            xPageFolderNode = temp
+                            xPageFolderNode = temp;
                         } else if (temp.isNodeType("hippo:handle")) {
-                            String id = RandomStringUtils.random(5, true, false)
-                            String originalName = temp.getName()
-                            String tempName = originalName + "-" + id
-                            String originalTempPath = temp.getPath()
-                            String newTempPath = temp.getParent().getPath() + tempName
-                            session.move(originalTempPath, newTempPath)
-                            xPageFolderNode = xPageFolderNode.addNode(segment, "hippostd:folder")
-                            xPageFolderNode.setProperty("hippostd:foldertype", folderType)
-                            translate(isTranslated, locale, xPageFolderNode)
+                            String id = RandomStringUtils.random(5, true, false);
+                            String originalName = temp.getName();
+                            String tempName = originalName + "-" + id;
+                            String originalTempPath = temp.getPath();
+                            String newTempPath = temp.getParent().getPath() + tempName;
+                            session.move(originalTempPath, newTempPath);
+                            xPageFolderNode = xPageFolderNode.addNode(segment, "hippostd:folder");
+                            xPageFolderNode.setProperty("hippostd:foldertype", folderType);
+                            translate(isTranslated, locale, xPageFolderNode);
                             if (!xPageFolderNode.isNodeType("hippostd:xpagefolder")) {
-                                xPageFolderNode.addMixin("hippostd:xpagefolder")
-                                xPageFolderNode.addMixin("mix:versionable")
-                                xPageFolderNode.setProperty("hippostd:channelid", hstConfiguration)
-                                xPageFolderNode.setProperty("hippostd:foldertype", folderType)
+                                xPageFolderNode.addMixin("hippostd:xpagefolder");
+                                xPageFolderNode.setProperty("hippostd:channelid", hstConfiguration);
                             }
-                            session.move(newTempPath, xPageFolderNode.getPath() + "/index")
-                            final Node index = xPageFolderNode.getNode("index")
-                            final NodeIterator it = index.getNodes()
+                            session.move(newTempPath, xPageFolderNode.getPath() + "/index");
+                            final Node index = xPageFolderNode.getNode("index");
+                            final NodeIterator it = index.getNodes();
                             while (it.hasNext()) {
-                                final Node doc = it.nextNode()
+                                final Node doc = it.nextNode();
                                 if (doc.isNodeType("hippo:document")) {
-                                    rename(doc, "index")
+                                    rename(doc, "index");
                                 }
                             }
                         }
                     } else {
-                        xPageFolderNode = xPageFolderNode.addNode(segment, "hippostd:folder")
+                        xPageFolderNode = xPageFolderNode.addNode(segment, "hippostd:folder");
                         if (!xPageFolderNode.isNodeType("hippostd:xpagefolder")) {
-                            xPageFolderNode.addMixin("hippostd:xpagefolder")
-                            xPageFolderNode.addMixin("mix:versionable")
-                            xPageFolderNode.setProperty("hippostd:channelid", hstConfiguration)
-                            xPageFolderNode.setProperty("hippostd:foldertype", folderType)
+                            xPageFolderNode.addMixin("hippostd:xpagefolder");
+                            xPageFolderNode.setProperty("hippostd:channelid", hstConfiguration);
                         }
-                        translate(isTranslated, locale, xPageFolderNode)
+                        translate(isTranslated, locale, xPageFolderNode);
                     }
                 }
             }
-            return xPageFolderNode
+            return xPageFolderNode;
         }
 
         void translate(boolean isTranslated, String locale, Node xPageFolderNode){
             if(isTranslated){
                 xPageFolderNode.addMixin("hippotranslation:translated")
-                xPageFolderNode.setProperty("hippotranslation:locale", locale)
-                xPageFolderNode.setProperty("hippotranslation:id", UUID.randomUUID().toString())
+                xPageFolderNode.setProperty("hippotranslation:locale", locale);
+                xPageFolderNode.setProperty("hippotranslation:id", UUID.randomUUID().toString());
             }
         }
 
         void rename(Node node, String newName) throws RepositoryException {
-            session.move(node.getPath(), node.getParent().getPath() + "/" + newName)
+            session.move(node.getPath(), node.getParent().getPath() + "/" + newName);
         }
 
         private void createDevSiteMap(final HstConfiguration hstConfiguration, final int maxDepth) {
@@ -344,72 +343,13 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
             }
         }
 
-        void executeStep0() {
-            final Node configurations = hstConfigNode.getParent()
-            if (configurations.hasNode(hstConfiguration + "-preview")) {
-                //todo step 0, preview configuration REMOVE by force
-                log.info("Step 0 - removing the preview configuration, before we start the conversion")
-                configurations.getNode(hstConfiguration + "-preview").remove()
-            }
-        }
-
-        void executeStep1() {
-            log.info("Step 1 - convert prototype pages to xpages")
-            final Map<String, XPage> xpagesFromPrototypePages = protoTypePages.getProtoTypePages().stream()
-                    .map({ protoTypePage -> new XPage(protoTypePage) }).collect(Collectors.toMap(
-                    { e -> e.name },
-                    { e -> e }
-            ))
-            xPages.getXPages().putAll(xpagesFromPrototypePages)
-            xPages.createXPagesFromPrototypePages()
-            log.info("Step 1 - end")
-        }
-
-        void executeStep2() {
-            log.info("Step 2 - Convert all sitemap items which have a primary (a.k.a relative content path) document configured on the sitemap items in the workspace")
-            workspace.siteMap.getAllSiteMapItems().stream()
-                    .filter({ siteMapItem -> siteMapItem.relativeContentPath != null && siteMapItem.page != null })
-                    .forEach({ siteMapItem ->
-                        try {
-                            final String relativeContentPath = siteMapItem.relativeContentPath
-                            log.info("starting with :" + siteMapItem.path)
-                            final Node siteBaseNode = getSiteBaseNode()
-                            final Page currentLandingPage = siteMapItem.page
-                            final String pageTitle = siteMapItem.pageTitle
-                            final Optional<XPage> xPageTemplate = xPages.findXPageTemplateByPage(currentLandingPage)
-                            if (siteBaseNode.hasNode(relativeContentPath) && xPageTemplate.isPresent()) {
-                                final List<ManageableComponent> currentLandingPageManageableComponents = currentLandingPage.getAllManageableComponents()
-
-                                final Node handleNode = siteBaseNode.getNode(relativeContentPath)
-
-                                applyXpageToDocument(handleNode, currentLandingPageManageableComponents, xPageTemplate.get(), pageTitle)
-
-                                final Node sitemapitemNode = session.getNode(siteMapItem.path)
-                                log.info("cleaning up sitemap item")
-                                sitemapitemNode.getProperty("hst:componentconfigurationid").remove()
-
-                                log.info("cleaning up workspace page: " + currentLandingPage.path)
-                                final Node pageNode = session.getNode(currentLandingPage.path)
-                                pageNode.remove()
-                                log.info("updated:" + siteMapItem.path)
-                            } else {
-                                log.warn("non existing relative content path, please fix: " + siteBaseNode.getPath() + "/" + relativeContentPath)
-                            }
-                        } catch (RepositoryException | WorkflowException e) {
-                            log.error("error", e)
-                        }
-                    })
-            log.info("Step 2 - end")
-        }
-
-
         void executeStep3() {
             log.info("Step 3a - iterate through workspace to get all sitemap items")
             OptionalInt maxDepth = workspace.siteMap.getAllSiteMapItems().stream()
                     .filter({ siteMapItem -> !siteMapItem.isWildcard })
 //                    .filter({ siteMapItem -> siteMapItem.relativeContentPath != null })
                     .mapToInt({ siteMapItem -> siteMapItem.depth })
-                    .max()
+                    .max();
             if (maxDepth.isPresent()) {
                 log.info("Maximum sitemap items depth in the workspace = " + maxDepth.getAsInt())
                 log.info("Step 3b - based on the Maximum Depth create the _default_ sitemap items (outside of the workspace) with the xpage folder name: " + xPageFolder)
@@ -429,89 +369,141 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
         }
 
         void executeStep4() {
-            log.info("Step 4 - Creating XPages from landingpages without a relative content path, this will create xpage documents in the XPage folder: " + xPageFolder)
-            workspace.siteMap.getAllSiteMapItems().stream()
+            log.info("=== STEP 4 - START: Creating XPages from landingpages without a relative content path ===")
+            log.info("Target XPage folder: " + xPageFolder)
+
+            // Count how many sitemap items we'll be processing
+            def allSiteMapItems = workspace.siteMap.getAllSiteMapItems()
+            log.info("Total sitemap items found: " + allSiteMapItems.size())
+
+            def filteredItems = allSiteMapItems.stream()
                     .filter({ siteMapItem -> siteMapItem.relativeContentPath == null && siteMapItem.page != null })
+                    .collect(Collectors.toList())
+            log.info("Found " + filteredItems.size() + " sitemap items without relative content path but with a page")
+
+            // Process in reverse depth order
+            filteredItems.stream()
                     .sorted(getReverseDepthComparator())
                     .forEach({ siteMapItem ->
                         try {
-                            log.info("sitemapitem without relative content path " + siteMapItem.path)
+                            log.info("------------------------------------------------------------")
+                            log.info("PROCESSING: Sitemap item without relative content path: " + siteMapItem.path)
+                            log.info("Sitemap item name: " + siteMapItem.name + ", depth: " + siteMapItem.depth)
+                            if (siteMapItem.page) {
+                                log.info("Associated page name: " + siteMapItem.page.name)
+                            }
+
+                            log.info("Getting site base node...")
                             final Node siteBaseNode = getSiteBaseNode()
+                            log.info("Site base node path: " + (siteBaseNode ? siteBaseNode.getPath() : "NULL"))
 
-                            Node xPageFolder = getOrCreateDeepestXpageFolder(siteBaseNode, PathUtils.normalizePath(siteMapItem.relativeSitemapPath))
-                            session.save()
+                            log.info("Normalized relative sitemap path: " + PathUtils.normalizePath(siteMapItem.relativeSitemapPath))
+                            log.info("Creating/getting XPage folder structure...")
+                            Node xPageFolder = getOrCreateDeepestXpageFolder(siteBaseNode, PathUtils.normalizePath(siteMapItem.relativeSitemapPath));
+                            log.info("XPage folder " + (xPageFolder ? "created at: " + xPageFolder.getPath() : "creation FAILED"))
 
+                            log.info("Saving session...")
+                            session.save();
+                            log.info("Session saved successfully")
+
+                            log.info("Getting current landing page...")
                             final Page currentLandingPage = siteMapItem.page
-                            final String pageTitle = siteMapItem.pageTitle
-                            final Optional<XPage> xPageTemplate = xPages.findXPageTemplateByPage(currentLandingPage)
+                            log.info("Landing page retrieved: " + (currentLandingPage ? "Success" : "FAILED"))
+
+                            log.info("Finding matching XPage template...")
+                            final Optional<XPage> xPageTemplate = xPages.findXPageTemplateByPage(currentLandingPage);
+                            log.info("XPage template found: " + xPageTemplate.isPresent() +
+                                    (xPageTemplate.isPresent() ? ", name: " + xPageTemplate.get().name : ", no matching template"))
 
                             if (xPageFolder != null && xPageTemplate.isPresent()) {
+                                log.info("Valid XPage folder and template found, proceeding with XPage creation")
+
+                                log.info("Retrieving manageable components from landing page...")
                                 final List<ManageableComponent> currentLandingPageManageableComponents = currentLandingPage.getAllManageableComponents()
+                                log.info("Found " + currentLandingPageManageableComponents.size() + " manageable components")
+                                if (currentLandingPageManageableComponents.size() > 0) {
+                                    log.debug("Component names: " + currentLandingPageManageableComponents.collect {it.name}.join(", "))
+                                    log.debug("Full list: " + currentLandingPageManageableComponents.collect {it.toString()}.join("\n"))
+                                }
+
                                 Node handleNode
 
-                                def xPageTemplateItem = xPageTemplate.get()
+                                def xPageTemplateItem = xPageTemplate.get();
+                                log.info("Using XPage template: " + xPageTemplateItem.name)
 
                                 if (!xPageFolder.hasNode(siteMapItem.name)) {
-                                    log.info("trying to add document..")
-                                    log.info(xPageFolder.getPath())
+                                    log.info("XPage document '" + siteMapItem.name + "' doesn't exist, creating new document...")
+                                    log.info("XPage folder path: " + xPageFolder.getPath())
 
-                                    FolderWorkflow folderWorkflow = getFolderWorkflow(xPageFolder)
-                                    log.info("folderworkflow is looking good")
+                                    log.info("Getting folder workflow...")
+                                    FolderWorkflow folderWorkflow = getFolderWorkflow(xPageFolder);
+                                    log.info("Folder workflow successfully obtained")
 
-                                    final Node xPageTemplateNode = hstConfigNode.getNode("hst:xpages").getNode(xPageTemplateItem.name)
-                                    HstNode xpageNode = new HstNodeImpl(xPageTemplateNode, null)
+                                    log.info("Getting XPage template node from: hst:xpages/" + xPageTemplateItem.name)
+                                    try {
+                                        final Node xPageTemplateNode = hstConfigNode.getNode("hst:xpages").getNode(xPageTemplateItem.name)
+                                        log.info("XPage template node found: " + xPageTemplateNode.getPath())
 
-                                    final JcrTemplateNode xPageLaoutAsJcrTemplate = JcrTemplateNodeConverter.getXPageLaoutAsJcrTemplate(xpageNode)
-                                    log.info("preparing the xpage template")
+                                        log.info("Creating HstNode wrapper...")
+                                        HstNode xpageNode = new HstNodeImpl(xPageTemplateNode, null)
 
-                                    final String newDocument = folderWorkflow.add("new-document", defaultXpageDocType, siteMapItem.name, xPageLaoutAsJcrTemplate)
-                                    log.info("added document" + newDocument)
+                                        log.info("Converting to JcrTemplateNode...")
+                                        final JcrTemplateNode xPageLaoutAsJcrTemplate = JcrTemplateNodeConverter.getXPageLaoutAsJcrTemplate(xpageNode)
 
-                                    handleNode = session.getNode(newDocument).getParent()
-                                    log.debug("handleNode: " + handleNode)
-                                    DocumentWorkflow documentWorkflow = getDocumentWorflow(handleNode)
-                                    resetDocumentThroughWorkflow(documentWorkflow)
+                                        log.info("Adding new document with name: " + siteMapItem.name + ", type: " + defaultXpageDocType)
+                                        final String newDocument = folderWorkflow.add("new-document", defaultXpageDocType, siteMapItem.name, xPageLaoutAsJcrTemplate)
+                                        log.info("Document added successfully: " + newDocument)
+
+                                        handleNode = session.getNode(newDocument).getParent()
+                                        log.info("Handle node retrieved: " + handleNode.getPath())
+
+                                        DocumentWorkflow documentWorkflow = getDocumentWorflow(handleNode);
+                                        log.info("Resetting document through workflow...")
+                                        resetDocumentThroughWorkflow(documentWorkflow);
+                                    } catch (RepositoryException e) {
+                                        log.error("Error getting XPage template node or creating document", e)
+                                    }
                                 } else if (xPageFolder.getNode(siteMapItem.name).isNodeType("hippostd:folder")) {
                                     log.info("folder exists! returning existing document")
-                                    xPageFolder = xPageFolder.getNode(siteMapItem.name)
+                                    xPageFolder = xPageFolder.getNode(siteMapItem.name);
                                     FolderWorkflow folderWorkflow = getFolderWorkflow(xPageFolder)
-                                    log.info("folderworkflow is looking good")
+                                    log.info("folderworkflow is available");
                                     final Node xPageTemplateNode = hstConfigNode.getNode("hst:xpages").getNode(xPageTemplateItem.name)
                                     HstNode xpageNode = new HstNodeImpl(xPageTemplateNode, null)
                                     final JcrTemplateNode xPageLaoutAsJcrTemplate = JcrTemplateNodeConverter.getXPageLaoutAsJcrTemplate(xpageNode)
-                                    log.info("preparing the xpage template")
+                                    log.info("preparing the xpage template");
                                     final String newDocument = folderWorkflow.add("new-document", defaultXpageDocType, "index", xPageLaoutAsJcrTemplate)
-                                    log.info("added document" + newDocument)
+                                    log.info("added document" + newDocument);
                                     handleNode = session.getNode(newDocument).getParent()
                                     DocumentWorkflow documentWorkflow = getDocumentWorflow(handleNode)
-                                    resetDocumentThroughWorkflow(documentWorkflow)
+                                    resetDocumentThroughWorkflow(documentWorkflow);
                                 } else if (xPageFolder.getNode(siteMapItem.name).isNodeType("hippo:handle")) {
                                     handleNode = xPageFolder.getNode(siteMapItem.name)
                                     DocumentWorkflow documentWorkflow = getDocumentWorflow(handleNode)
-                                    resetDocumentThroughWorkflow(documentWorkflow)
+                                    resetDocumentThroughWorkflow(documentWorkflow);
                                 }
 
-                                applyXpageToDocument(handleNode, currentLandingPageManageableComponents, xPageTemplateItem, pageTitle)
+                                applyXpageToDocument(handleNode, currentLandingPageManageableComponents, xPageTemplateItem)
 
                                 //cleanup sitemap item reference to component configuration id
                                 if (session.nodeExists(siteMapItem.path)) {
                                     log.info("cleaning up sitemap item")
-                                    Node siteMapItemNode = session.getNode(siteMapItem.path)
+                                    Node siteMapItemNode = session.getNode(siteMapItem.path);
                                     if (!siteMapItemNode.getNodes().hasNext()) {
                                         log.info("node has sub nodes so it will be removed")
-                                        siteMapItemNode.remove()
+                                        siteMapItemNode.remove();
                                     } else {
                                         log.info("cannot remove node because it has subnodes, will need to a custom relative content path")
                                         if (siteMapItemNode.hasProperty("hst:componentconfigurationid")) {
                                             siteMapItemNode.getProperty("hst:componentconfigurationid").remove()
                                         }
-                                        siteMapItemNode.setProperty("hst:relativecontentpath", PathUtils.normalizePath(handleNode.getPath().replace(siteBaseNode.getPath(), "")))
+                                        siteMapItemNode.setProperty("hst:relativecontentpath", PathUtils.normalizePath(handleNode.getPath().replace(siteBaseNode.getPath(), "")));
                                     }
                                 }
 
                                 if (session.nodeExists(currentLandingPage.path)) {
                                     log.info("cleaning up workspace page: " + currentLandingPage.path)
-                                    session.getNode(currentLandingPage.path).remove()
+                                    session.getNode(currentLandingPage.path).remove();
                                 }
                                 log.info("updated:" + siteMapItem.path)
                             }
@@ -522,6 +514,67 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
             log.info("Step 4 - end")
         }
 
+        void executeStep2() {
+            log.info("Step 2 - Convert all sitemap items which have a primary (a.k.a relative content path) document configured on the sitemap items in the workspace")
+            workspace.siteMap.getAllSiteMapItems().stream()
+                    .filter({ siteMapItem -> siteMapItem.relativeContentPath != null && siteMapItem.page != null })
+                    .forEach({ siteMapItem ->
+                        try {
+                            final String relativeContentPath = siteMapItem.relativeContentPath
+                            log.info("starting with :" + siteMapItem.path)
+                            final Node siteBaseNode = getSiteBaseNode();
+                            final Page currentLandingPage = siteMapItem.page
+                            final Optional<XPage> xPageTemplate = xPages.findXPageTemplateByPage(currentLandingPage)
+                            if (siteBaseNode.hasNode(relativeContentPath) && xPageTemplate.isPresent()) {
+                                final List<ManageableComponent> currentLandingPageManageableComponents = currentLandingPage.getAllManageableComponents()
+
+                                final Node handleNode = siteBaseNode.getNode(relativeContentPath)
+
+                                applyXpageToDocument(handleNode, currentLandingPageManageableComponents, xPageTemplate.get());
+
+                                final Node sitemapitemNode = session.getNode(siteMapItem.path)
+                                log.info("cleaning up sitemap item")
+                                sitemapitemNode.getProperty("hst:componentconfigurationid").remove()
+
+                                log.info("cleaning up workspace page: " + currentLandingPage.path)
+                                final Node pageNode = session.getNode(currentLandingPage.path)
+                                pageNode.remove()
+                                log.info("updated:" + siteMapItem.path)
+                            } else {
+                                log.warn("non existing relative content path, please fix: " + siteBaseNode.getPath() + "/" + relativeContentPath)
+                            }
+                        } catch (RepositoryException | WorkflowException e) {
+                            log.error("error", e)
+                        }
+                    })
+            log.info("Step 2 - end")
+
+        }
+
+        void executeStep1() {
+            log.info("Step 1 - convert prototype pages to xpages")
+            if (protoTypePages == null || protoTypePages.getProtoTypePages().isEmpty()) {
+                log.info("No prototype pages found, skipping step 1")
+                return
+            }
+            final Map<String, XPage> xpagesFromPrototypePages = protoTypePages.getProtoTypePages().stream()
+                    .map({ protoTypePage -> new XPage(protoTypePage) }).collect(Collectors.toMap(
+                    { e -> e.name },
+                    { e -> e }
+            ))
+            xPages.getXPages().putAll(xpagesFromPrototypePages)
+            xPages.createXPagesFromPrototypePages()
+            log.info("Step 1 - end")
+        }
+
+        void executeStep0() {
+            final Node configurations = hstConfigNode.getParent()
+            if (configurations.hasNode(hstConfiguration + "-preview")) {
+                //todo step 0, preview configuration REMOVE by force
+                log.info("Step 0 - removing the preview configuration, before we start the conversion")
+                configurations.getNode(hstConfiguration + "-preview").remove()
+            }
+        }
     }
 
 
@@ -557,7 +610,7 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
                     .flatMap(new Function<SiteMapItem, Stream<? extends SiteMapItem>>() {
                         @Override
                         Stream<? extends SiteMapItem> apply(final SiteMapItem siteMapItem) {
-                            return siteMapItem.flattened()
+                            return siteMapItem.flattened();
                         }
                     })
                     .collect(Collectors.toList())
@@ -578,7 +631,6 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
         List<SiteMapItem> siteMapItems = new ArrayList<>()
         String relativeContentPath
         String name
-        String pageTitle
         Page page
         SiteMap siteMap
         Node documentHandle
@@ -596,11 +648,6 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
         }
 
         SiteMapItem(SiteMap siteMap, Node node) throws RepositoryException {
-            if (node.hasProperty("hst:relativecontentpath")) {
-                log.info("Relative content path " + node.getProperty("hst:relativecontentpath").getString())
-                node.setProperty("hst:relativecontentpath", node.getProperty("hst:relativecontentpath").getString().replaceAll("^/", ""))
-            }
-
             this.name = node.getName()
             this.isWildcard = ignoreWithName.stream().filter({ pattern -> name.contains(pattern) }).findAny().isPresent()
             this.path = node.getPath()
@@ -628,9 +675,6 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
                     documentHandle = siteBaseNode.getNode(relativeContentPath)
                 }
             }
-            if (propertyMap.containsKey("hst:pagetitle")) {
-                this.pageTitle = propertyMap.get("hst:pagetitle").getString()
-            }
             final NodeIterator it = node.getNodes()
             while (it.hasNext()) {
                 final Node sitemapItemNode = it.nextNode()
@@ -646,7 +690,7 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
                     siteMapItems.stream().flatMap(new Function<SiteMapItem, Stream<? extends SiteMapItem>>() {
                         @Override
                         Stream<? extends SiteMapItem> apply(final SiteMapItem siteMapItem) {
-                            return siteMapItem.flattened()
+                            return siteMapItem.flattened();
                         }
                     }))
         }
@@ -667,8 +711,37 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
                     ", depth=" + depth +
                     ", isWildcard=" + isWildcard +
                     ", xPageSiteMapItem=" + xPageSiteMapItem +
-                    ", pageTitle=" + pageTitle +
                     '}'
+        }
+
+        /**
+         * Creates a string representation without using identifiers, which could be
+         * unreliable for comparisons between Page and XPage objects
+         */
+        String toStringWithoutIdentifier() {
+            return "Component{" +
+                    "properties='" + propertyMapToString() + '\'' +
+                    ", staticComponents=" + staticComponentsToStringWithoutIdentifier() +
+                    ", manageableComponents=" + manageableComponentsToStringWithoutIdentifier() +
+                    '}'
+        }
+
+        String staticComponentsToStringWithoutIdentifier() {
+            if (staticComponents == null || staticComponents.isEmpty()) {
+                return "[]"
+            }
+            return staticComponents.stream()
+                    .map({ component -> component.toStringWithoutIdentifier() })
+                    .collect(Collectors.joining(", ", "[", "]"))
+        }
+
+        String manageableComponentsToStringWithoutIdentifier() {
+            if (manageableComponents == null || manageableComponents.isEmpty()) {
+                return "[]"
+            }
+            return manageableComponents.stream()
+                    .map({ component -> component.toStringWithoutIdentifier() })
+                    .collect(Collectors.joining(", ", "[", "]"))
         }
 
         @Override
@@ -768,14 +841,6 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
             this.displayName = protoTypePage.isNodeType("hst:prototypemeta") && protoTypePage.hasProperty("hst:displayname") ? protoTypePage.getProperty("hst:displayname").getString() : null
         }
 
-        List<ManageableComponent> getAllManageableComponents() {
-            final List<ManageableComponent> collect = flattened()
-                    .filter({ component -> component instanceof ManageableComponent })
-                    .map({ component -> (ManageableComponent) component })
-                    .collect(Collectors.toList())
-            return collect
-        }
-
         @Override
         String toString() {
             return "ProtoTypePage{" +
@@ -833,7 +898,7 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
                     try {
                         manageableComponent.toNode(added)
                     } catch (RepositoryException e) {
-                        log.error("error...", e)
+                        log.error("error...", e);
                     }
                 })
             }
@@ -887,11 +952,19 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
         }
 
         Stream<AbstractComponent> flattened() {
-            return Stream.concat(
-                    Stream.concat(Stream.of(this),
-                            manageableComponents.stream().flatMap({ manageableComponent -> manageableComponent.flattened() })),
-                    Stream.concat(Stream.of(this),
-                            staticComponents.stream().flatMap({ staticComponent -> staticComponent.flattened() })))
+            // Start with the current component
+            Stream<AbstractComponent> thisStream = Stream.of(this)
+
+            // Add flattened manageable components (without duplicating 'this')
+            Stream<AbstractComponent> manageable = manageableComponents.stream()
+                    .flatMap({ manageableComponent -> manageableComponent.flattened() })
+
+            // Add flattened static components (without duplicating 'this')
+            Stream<AbstractComponent> statics = staticComponents.stream()
+                    .flatMap({ staticComponent -> staticComponent.flattened() })
+
+            // Combine all streams without duplication
+            return Stream.concat(thisStream, Stream.concat(manageable, statics))
         }
 
         void setName(final String name) {
@@ -907,7 +980,7 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
                         node.setProperty(propertyName, property.getValue())
                     }
                 } catch (RepositoryException e) {
-                    log.error("error while adding hst properties to the node", e)
+                    log.error("error while adding hst properties to the node", e);
                 }
             })
             if (!staticComponents.isEmpty()) {
@@ -948,6 +1021,36 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
                     .collect(Collectors.joining(", ", "{", "}"))
         }
 
+        /**
+         * Creates a string representation without using identifiers, which could be
+         * unreliable for comparisons between Page and XPage objects
+         */
+        String toStringWithoutIdentifier() {
+            return "Component{" +
+                    "properties='" + propertyMapToString() + '\'' +
+                    ", staticComponents=" + staticComponentsToStringWithoutIdentifier() +
+                    ", manageableComponents=" + manageableComponentsToStringWithoutIdentifier() +
+                    '}'
+        }
+
+        String staticComponentsToStringWithoutIdentifier() {
+            if (staticComponents == null || staticComponents.isEmpty()) {
+                return "[]"
+            }
+            return staticComponents.stream()
+                    .map({ component -> component.toStringWithoutIdentifier() })
+                    .collect(Collectors.joining(", ", "[", "]"))
+        }
+
+        String manageableComponentsToStringWithoutIdentifier() {
+            if (manageableComponents == null || manageableComponents.isEmpty()) {
+                return "[]"
+            }
+            return manageableComponents.stream()
+                    .map({ component -> component.toStringWithoutIdentifier() })
+                    .collect(Collectors.joining(", ", "[", "]"))
+        }
+
         @Override
         String toString() {
             return "AbstractComponent{" +
@@ -977,13 +1080,32 @@ class LandingPage2XPageConversionScriptGroovy extends BaseNodeUpdateVisitor {
         }
 
         Optional<XPage> findXPageTemplateByPage(Page page) {
-            final String pageIdentifier = page.toString()
+            // Use toStringWithoutIdentifier instead of toString for more reliable comparison
+            final String pageIdentifierSafe = page.toStringWithoutIdentifier()
+//            log.info("Finding XPage template for page: " + page.name + " (identifier safe: " + pageIdentifierSafe + ")")
             final Optional<XPage> first = xPages.values().stream()
                     .filter({ xPage ->
-                        (pageIdentifier == xPage.toString())
+                        final String xPageIdentifierSafe = xPage.toStringWithoutIdentifier()
+//                        log.info("Comparing with XPage: " + xPage.name + " (identifier safe: " + xPageIdentifierSafe + ")")
+                        final boolean matches = (pageIdentifierSafe == xPageIdentifierSafe)
+
+                        if (log.isDebugEnabled()) {
+                            log.debug("Comparing with XPage: " + xPage.name +
+                                    ", match: " + matches +
+                                    (matches ? " (MATCH FOUND)" : ""))
+                        }
+
+                        return matches;
                     })
                     .findFirst()
-            return first
+
+            if (first.isPresent()) {
+                log.info("Found matching XPage template: " + first.get().name)
+            } else {
+                log.info("No matching XPage template found for page: " + page.name)
+            }
+
+            return first;
         }
 
         Map<String, XPage> getXPages() {

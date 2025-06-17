@@ -1,6 +1,10 @@
 Check: readme.pdf and landing2xpageconversion.yaml
 
-In the example project you can already go to the updater script and execute landing2xpageconversion script.
+In the example project, you can already go to the updater script and execute landing2xpageconversion script.
+
+The configuration script can be run locally to add the correct configuration to hst configuration. 
+Only the Conversion script is required in remote environments. 
+The conversion script should also convert configuration but may have issues with hst inheritance and hst:pages that do not map 1:1 to a hst:prototypepage.
 
 Running Locally
 ===============
