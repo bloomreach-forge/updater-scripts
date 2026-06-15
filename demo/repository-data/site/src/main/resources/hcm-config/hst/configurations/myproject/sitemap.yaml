@@ -56,3 +56,24 @@ definitions:
           hst:relativecontentpath: ${parent}/${1}
       /a-new-sitemap-item:
         jcr:primaryType: hst:sitemapitem
+      /_default_:
+        jcr:primaryType: hst:sitemapitem
+        hst:relativecontentpath: xpages/${1}
+        /_default_:
+          jcr:primaryType: hst:sitemapitem
+          hst:relativecontentpath: ${parent}/${2}
+          /_default_:
+            jcr:primaryType: hst:sitemapitem
+            hst:relativecontentpath: ${parent}/${3}
+            /_default_:
+              jcr:primaryType: hst:sitemapitem
+              hst:relativecontentpath: ${parent}/${4}
+            /_index_:
+              jcr:primaryType: hst:sitemapitem
+              hst:relativecontentpath: ${parent}/index
+          /_index_:
+            jcr:primaryType: hst:sitemapitem
+            hst:relativecontentpath: ${parent}/index
+        /_index_:
+          jcr:primaryType: hst:sitemapitem
+          hst:relativecontentpath: ${parent}/index

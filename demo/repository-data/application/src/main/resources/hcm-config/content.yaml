@@ -1,0 +1,10 @@
+definitions:
+  config:
+    /content:
+      hippostd:hasfolders: true
+    /content/assets:
+      hippostd:hasfolders: false
+    /content/documents:
+      hippostd:hasfolders: true
+    /content/gallery:
+      hippostd:hasfolders: true

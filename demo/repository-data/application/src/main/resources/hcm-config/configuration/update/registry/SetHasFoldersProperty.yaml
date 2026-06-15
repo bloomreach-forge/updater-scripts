@@ -1,0 +1,49 @@
+definitions:
+  config:
+    /hippo:configuration/hippo:update/hippo:registry/SetHasFoldersProperty:
+      hipposys:script: "/*\r\n * Copyright 2025-2026 Bloomreach\r\n *\r\n * Licensed\
+        \ under the Apache License, Version 2.0 (the \"License\");\r\n * you may not\
+        \ use this file except in compliance with the License.\r\n * You may obtain\
+        \ a copy of the License at\r\n *\r\n *   http://www.apache.org/licenses/LICENSE-2.0\r\
+        \n *\r\n * Unless required by applicable law or agreed to in writing, software\r\
+        \n * distributed under the License is distributed on an \"AS IS\" BASIS,\r\
+        \n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\r\
+        \n * See the License for the specific language governing permissions and\r\
+        \n * limitations under the License.\r\n */\r\n\r\npackage org.hippoecm.frontend.plugins.cms.dev.updater\r\
+        \n\r\nimport org.onehippo.repository.update.BaseNodeUpdateVisitor\r\n\r\n\
+        import javax.jcr.Node\r\nimport javax.jcr.NodeIterator\r\nimport javax.jcr.Session\r\
+        \n\r\nimport org.hippoecm.repository.HippoStdNodeType;\r\n\r\n/**\r\n * SetHasFoldersProperty\
+        \ is a script that should be configured to visit all\r\n * hippostd:folder\
+        \ nodes below /content, for documents, images and assets, and\r\n * sets hippostd:hasfolders\
+        \ flag whether the folder contains subfolders or\r\n * not, by iterating subnodes.\r\
+        \n *\r\n * If some nodes should not have this property, possibly if some subfolders\r\
+        \n * are hidden for certain user groups, then it is advisable to tweak the\
+        \ script\r\n * and add a condition to skip those nodes.\r\n */\r\nclass SetHasFoldersProperty\
+        \ extends BaseNodeUpdateVisitor {\r\n\r\n  boolean overwrite = false;\r\n\r\
+        \n  void initialize(Session session) {\r\n    overwrite = parametersMap.get(\"\
+        overwrite\", false)\r\n\r\n    log.info \"SetHasFoldersProperty initialized\
+        \ with parameters: { overwrite: ${overwrite} }\"\r\n\r\n  }\r\n  boolean doUpdate(Node\
+        \ node) {\r\n\r\n    if (!node.isNodeType(HippoStdNodeType.NT_FOLDER)) {\r\
+        \n      log.debug \"Skipping node ${node.path} because it is not a folder\
+        \ but a ${node.primaryNodeType.name}\"\r\n      return false\r\n    }\r\n\r\
+        \n    if (node.hasProperty(HippoStdNodeType.HIPPOSTD_HAS_FOLDERS) && !overwrite)\
+        \ {\r\n      log.debug \"Skipping node ${node.path} because it already has\
+        \ hippostd:hasfolders property and overwrite is false\"\r\n      return false\r\
+        \n    }\r\n\r\n    // iterate for subfolders\r\n    for (NodeIterator iter\
+        \ = node.getNodes(); iter.hasNext(); ) {\r\n      final Node subNode = iter.nextNode();\r\
+        \n\r\n      // document folders but also asset/image gallery folders\r\n \
+        \     if (subNode.isNodeType(HippoStdNodeType.NT_FOLDER)) {\r\n        node.setProperty(HippoStdNodeType.HIPPOSTD_HAS_FOLDERS,\
+        \ true);\r\n\r\n        if (!overwrite) {\r\n          // optimization: now\
+        \ it is known that this folder's parent has subfolders\r\n          // so\
+        \ we can skip iteration on the parent if it hasn't been visited yet\r\n  \
+        \        Node parent = node.getParent();\r\n          while (parent != null\
+        \ && parent.isNodeType(HippoStdNodeType.NT_FOLDER)) {\r\n            parent.setProperty(HippoStdNodeType.HIPPOSTD_HAS_FOLDERS,\
+        \ true);\r\n            parent = parent.getParent();\r\n          }\r\n  \
+        \      }\r\n\r\n        log.debug \"Visited node ${node.path}: set ${HippoStdNodeType.HIPPOSTD_HAS_FOLDERS}\
+        \ to true\"\r\n        return true\r\n      }\r\n    }\r\n\r\n    node.setProperty(HippoStdNodeType.HIPPOSTD_HAS_FOLDERS,\
+        \ false);\r\n    log.debug \"Visited node ${node.path}: set ${HippoStdNodeType.HIPPOSTD_HAS_FOLDERS}\
+        \ to false\"\r\n    return true\r\n  }\r\n\r\n  boolean undoUpdate(Node node)\
+        \ {\r\n    throw new UnsupportedOperationException('Updater does not implement\
+        \ undoUpdate method')\r\n  }\r\n\r\n}"
+      hipposys:loglevel: DEBUG
+      hipposys:logtarget: REPOSITORY

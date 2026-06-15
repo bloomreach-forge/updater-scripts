@@ -1,0 +1,30 @@
+definitions:
+  config:
+    /hst:hst/hst:configurations/myproject/hst:xpages:
+      jcr:primaryType: hst:xpages
+      /two-columns:
+        jcr:primaryType: hst:xpage
+        hst:label: Two columns
+        hst:referencecomponent: hst:abstractpages/base
+        /main:
+          jcr:primaryType: hst:component
+          /content:
+            jcr:primaryType: hst:component
+            hst:parameternames: []
+            hst:parametervalues: []
+            hst:template: two-columns.main.content
+            /left-container:
+              jcr:primaryType: hst:containercomponent
+              hippo:identifier: ac851139-de1a-485d-a3b4-96d28e538de7
+            /right-container:
+              jcr:primaryType: hst:containercomponent
+              hippo:identifier: 4367b04e-61b5-4dc0-8dbb-44bb1207c86c
+      /contentpage:
+        jcr:primaryType: hst:xpage
+        hst:label: Simple Content Page
+        hst:referencecomponent: hst:abstractpages/base
+        /main:
+          jcr:primaryType: hst:containercomponent
+          hippo:identifier: 137bca1b-9e9f-4a42-8dc6-8ebe111497da
+          hst:label: Content Page Main
+          hst:xtype: hst.vbox

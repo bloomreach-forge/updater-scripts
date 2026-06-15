@@ -3,6 +3,7 @@
   jcr:mixinTypes: ['hippotranslation:translated', 'mix:referenceable']
   jcr:uuid: 0384465f-d482-4fb9-b1f6-e7fc69ae913c
   hippostd:foldertype: [new-content-document, new-content-folder]
+  hippostd:hasfolders: false
   hippotranslation:id: 03481a2b-3a48-41c1-baf0-2622cd833b07
   hippotranslation:locale: en
   /sample-document:
@@ -13,7 +14,7 @@
     hippo:versionHistory: 5a50d2f3-1533-443f-bd89-71e5618c18f4
     /sample-document[1]:
       jcr:primaryType: myproject:contentdocument
-      jcr:mixinTypes: ['mix:referenceable']
+      jcr:mixinTypes: ['hst:xpagemixin', 'mix:referenceable']
       jcr:uuid: c57287c4-988c-4a06-ae2b-0d7bcd00669f
       hippo:availability: [live]
       hippostd:holder: admin
@@ -29,7 +30,7 @@
       myproject:introduction: Lorem Ipsum is simply dummy text of the printing and
         typesetting industry.
       myproject:publicationdate: 2014-03-25T16:52:00+01:00
-      myproject:title: Lorem
+      myproject:title: barlv2
       /myproject:content:
         jcr:primaryType: hippostd:html
         hippostd:content: |-
@@ -49,9 +50,29 @@
 
                       </body>
                       </html>
+      /hst:xpage:
+        jcr:primaryType: hst:xpage
+        jcr:uuid: 7ad18b85-6ba0-4a98-b951-0aadb0fbbb6d
+        hst:pageref: contentpage
+        /137bca1b-9e9f-4a42-8dc6-8ebe111497da:
+          jcr:primaryType: hst:containercomponent
+          jcr:uuid: b79ee6b8-4268-4359-808d-92ef3dafeff9
+          hippo:identifier: 51aba890-cda7-4083-8e4f-c6bb1e06cc2b
+          hst:label: Content Page Main
+          hst:lastmodified: 2020-10-19T16:57:08.086+02:00
+          hst:xtype: hst.vbox
+          /simplecontent:
+            jcr:primaryType: hst:containeritemcomponent
+            jcr:uuid: 70cb740e-a239-44b4-8e4f-6698f2e5fbae
+            hst:componentclassname: org.onehippo.cms7.essentials.components.EssentialsDocumentComponent
+            hst:iconpath: images/essentials/catalog-component-icons/simple-content.svg
+            hst:label: Simple Content
+            hst:parameternames: [document, org.hippoecm.hst.core.component.template]
+            hst:parametervalues: [content/sample-document, 'webfile:/freemarker/hstdefault/contentpage-main.ftl']
+            hst:template: contentpage-main
     /sample-document[2]:
       jcr:primaryType: myproject:contentdocument
-      jcr:mixinTypes: ['mix:referenceable', 'mix:versionable']
+      jcr:mixinTypes: ['hst:xpagemixin', 'mix:referenceable', 'mix:versionable']
       jcr:uuid: d373248f-cf1a-46c7-be06-9c7a2260d73a
       hippo:availability: [preview]
       hippostd:retainable: false
@@ -65,7 +86,7 @@
       myproject:introduction: Lorem Ipsum is simply dummy text of the printing and
         typesetting industry.
       myproject:publicationdate: 2014-03-25T16:52:00+01:00
-      myproject:title: Lorem
+      myproject:title: barlv2
       /myproject:content:
         jcr:primaryType: hippostd:html
         hippostd:content: |-
@@ -85,6 +106,26 @@
 
                       </body>
                       </html>
+      /hst:xpage:
+        jcr:primaryType: hst:xpage
+        jcr:uuid: 3025da27-22f2-405c-9779-2e41f8b38992
+        hst:pageref: contentpage
+        /137bca1b-9e9f-4a42-8dc6-8ebe111497da:
+          jcr:primaryType: hst:containercomponent
+          jcr:uuid: 5686af6d-6720-47ad-917a-74d5031ba02a
+          hippo:identifier: 2f6fbe8f-d201-4238-968b-89d4b1dc5449
+          hst:label: Content Page Main
+          hst:lastmodified: 2020-10-19T16:57:08.086+02:00
+          hst:xtype: hst.vbox
+          /simplecontent:
+            jcr:primaryType: hst:containeritemcomponent
+            jcr:uuid: 0134149d-8767-4374-bebd-9ca990920296
+            hst:componentclassname: org.onehippo.cms7.essentials.components.EssentialsDocumentComponent
+            hst:iconpath: images/essentials/catalog-component-icons/simple-content.svg
+            hst:label: Simple Content
+            hst:parameternames: [document, org.hippoecm.hst.core.component.template]
+            hst:parametervalues: [content/sample-document, 'webfile:/freemarker/hstdefault/contentpage-main.ftl']
+            hst:template: contentpage-main
     /sample-document[3]:
       jcr:primaryType: myproject:contentdocument
       jcr:mixinTypes: ['mix:referenceable']
@@ -128,7 +169,7 @@
     hippo:name: Another sample document
     /another-sample-document:
       jcr:primaryType: myproject:contentdocument
-      jcr:mixinTypes: ['mix:referenceable']
+      jcr:mixinTypes: ['hst:xpagemixin', 'mix:referenceable']
       jcr:uuid: ed5672f2-6d2c-4b69-a9f7-71fe64d53418
       hippo:availability: [live, preview]
       hippostd:holder: admin
@@ -143,7 +184,7 @@
       myproject:introduction: Lorem Ipsum is simply dummy text of the printing and
         typesetting industry.
       myproject:publicationdate: 2014-03-25T16:52:00+01:00
-      myproject:title: Another Lorem
+      myproject:title: barlv2secondary
       /myproject:content:
         jcr:primaryType: hippostd:html
         hippostd:content: |-
@@ -163,3 +204,23 @@
 
                       </body>
                       </html>
+      /hst:xpage:
+        jcr:primaryType: hst:xpage
+        jcr:uuid: a0609e97-166c-43be-a9f6-635eedb9bcf3
+        hst:pageref: contentpage
+        /137bca1b-9e9f-4a42-8dc6-8ebe111497da:
+          jcr:primaryType: hst:containercomponent
+          jcr:uuid: 49f48788-5c28-4eeb-b009-ba20e22f0fa8
+          hippo:identifier: f7544eb6-f7a5-44b2-be3b-2866853fdd00
+          hst:label: Content Page Main
+          hst:lastmodified: 2020-10-19T16:57:08.086+02:00
+          hst:xtype: hst.vbox
+          /simplecontent:
+            jcr:primaryType: hst:containeritemcomponent
+            jcr:uuid: 2b65e59e-801f-4f78-b234-544fe70e3d0a
+            hst:componentclassname: org.onehippo.cms7.essentials.components.EssentialsDocumentComponent
+            hst:iconpath: images/essentials/catalog-component-icons/simple-content.svg
+            hst:label: Simple Content
+            hst:parameternames: [document, org.hippoecm.hst.core.component.template]
+            hst:parametervalues: [content/another-sample-document, 'webfile:/freemarker/hstdefault/contentpage-main.ftl']
+            hst:template: contentpage-main

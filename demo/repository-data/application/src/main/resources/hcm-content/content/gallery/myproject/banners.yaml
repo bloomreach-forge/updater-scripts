@@ -4,6 +4,7 @@
   jcr:uuid: 889e1e98-6bc5-4320-8d0b-31c8fedd9c5c
   hippostd:foldertype: [new-image-folder]
   hippostd:gallerytype: ['hippogallery:imageset']
+  hippostd:hasfolders: false
   /banner-1.jpg:
     jcr:primaryType: hippo:handle
     jcr:mixinTypes: ['mix:referenceable']
