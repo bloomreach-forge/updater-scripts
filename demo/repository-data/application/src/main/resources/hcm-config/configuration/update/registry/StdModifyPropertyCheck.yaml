@@ -1,0 +1,78 @@
+definitions:
+  config:
+    /hippo:configuration/hippo:update/hippo:registry/StdModifyPropertyCheck:
+      hipposys:description: ''
+      hipposys:script: "/*\r\n * Copyright 2015-2026 Bloomreach\r\n *\r\n * Licensed\
+        \ under the Apache License, Version 2.0 (the \"License\");\r\n * you may not\
+        \ use this file except in compliance with the License.\r\n * You may obtain\
+        \ a copy of the License at\r\n *\r\n *   http://www.apache.org/licenses/LICENSE-2.0\r\
+        \n *\r\n * Unless required by applicable law or agreed to in writing, software\r\
+        \n * distributed under the License is distributed on an \"AS IS\" BASIS,\r\
+        \n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\r\
+        \n * See the License for the specific language governing permissions and\r\
+        \n * limitations under the License.\r\n */\r\n\r\npackage org.onehippo.repository.updaters;\r\
+        \n\r\nimport java.util.ArrayList;\r\nimport java.util.Collection;\r\nimport\
+        \ java.util.Collections;\r\nimport java.util.Iterator;\r\nimport java.util.Stack;\r\
+        \n\r\nimport javax.jcr.ItemVisitor;\r\nimport javax.jcr.Node;\r\nimport javax.jcr.Property;\r\
+        \nimport javax.jcr.RepositoryException;\r\nimport javax.jcr.Value;\r\nimport\
+        \ javax.jcr.query.Query;\r\nimport javax.jcr.query.QueryManager;\r\n\r\nimport\
+        \ org.hippoecm.repository.util.JcrUtils;\r\nimport org.hippoecm.repository.util.NodeIterable;\r\
+        \nimport org.onehippo.repository.update.BaseNodeUpdateVisitor;\r\n\r\n/**\r\
+        \n * This script checks the hippostd:modify properties on hippostd:templatequery\
+        \ nodes\r\n * for possible misconfigurations. This script will not make any\
+        \ changes but emit a warning\r\n * whenever it encounters a hippostd:modify\
+        \ value that might be invalid. This means\r\n * that it cannot locate the\
+        \ node or property pointed to in the hippostd:modify property value\r\n *\
+        \ in the configured template. Manually check these values to see if there\
+        \ is a problem.\r\n */\r\nclass CheckStdModifyProperties extends BaseNodeUpdateVisitor\
+        \ {\r\n\r\n    @Override\r\n    public boolean doUpdate(final Node node) throws\
+        \ RepositoryException {\r\n        for (Node template : getTemplates(node))\
+        \ {\r\n            final PathVisitor visitor = new PathVisitor();\r\n    \
+        \        template.accept(visitor);\r\n            for (String relPath : getPathsToCheck(node))\
+        \ {\r\n                if (!visitor.hasPath(relPath)) {\r\n              \
+        \      log.warn(\"Possible invalid hippostd:modify value at {}: not found\
+        \ {}\", node.getPath(), relPath);\r\n                }\r\n            }\r\n\
+        \        }\r\n        return false;\r\n    }\r\n\r\n    Iterable<Node> getTemplates(Node\
+        \ queryNode) throws RepositoryException {\r\n        final QueryManager queryManager\
+        \ = queryNode.getSession().getWorkspace().getQueryManager();\r\n        final\
+        \ Query query = queryManager.getQuery(queryNode);\r\n        return new NodeIterable(query.execute().getNodes());\r\
+        \n    }\r\n\r\n    Iterable<String> getPathsToCheck(Node queryNode) throws\
+        \ RepositoryException {\r\n        final Property modify = JcrUtils.getPropertyIfExists(queryNode,\
+        \ \"hippostd:modify\");\r\n        if (modify == null) {\r\n            return\
+        \ Collections.emptyList();\r\n        }\r\n        Collection<String> result\
+        \ = new ArrayList<>();\r\n        for (Value value : modify.getValues()) {\r\
+        \n            final String key = value.getString();\r\n            if (key.startsWith(\"\
+        ./\") && key.lastIndexOf('/') != 1) {\r\n                result.add(key);\r\
+        \n            }\r\n        }\r\n        return result;\r\n    }\r\n\r\n  \
+        \  boolean undoUpdate(Node node) {\r\n        throw new UnsupportedOperationException('Updater\
+        \ does not implement undoUpdate method')\r\n    }\r\n\r\n    static class\
+        \ PathVisitor implements ItemVisitor {\r\n\r\n        private final Stack<String>\
+        \ current = new Stack<>();\r\n        private Collection<String> paths = new\
+        \ ArrayList<>();\r\n        @Override\r\n        public void visit(final Property\
+        \ property) throws RepositoryException {\r\n        }\r\n\r\n        @Override\r\
+        \n        public void visit(final Node node) throws RepositoryException {\r\
+        \n            if (current.isEmpty()) {\r\n                current.push(\"\
+        .\");\r\n            } else {\r\n                current.push(node.getName());\r\
+        \n            }\r\n            addPath();\r\n            for (Node child :\
+        \ new NodeIterable(node.getNodes())) {\r\n                visit(child);\r\n\
+        \            }\r\n            current.pop();\r\n        }\r\n\r\n        private\
+        \ void addPath() {\r\n            StringBuilder sb = new StringBuilder();\r\
+        \n            Iterator iter = current.iterator();\r\n            while (iter.hasNext())\
+        \ {\r\n                sb.append(iter.next());\r\n                if (iter.hasNext())\
+        \ {\r\n                    sb.append(\"/\");\r\n                }\r\n    \
+        \        }\r\n            paths.add(sb.toString());\r\n        }\r\n\r\n \
+        \       boolean hasPath(String path) {\r\n            String[] elements =\
+        \ path.split(\"/\");\r\n            Collection<String> candidates = new ArrayList<>(paths);\r\
+        \n            for (int i = 0; i < elements.length - 1; i++) {\r\n        \
+        \        final Iterator<String> iterator = candidates.iterator();\r\n    \
+        \            while (iterator.hasNext()) {\r\n                    if (!matchElement(elements[i],\
+        \ i, iterator.next())) {\r\n                        iterator.remove();\r\n\
+        \                    }\r\n                }\r\n            }\r\n         \
+        \   return candidates.size() > 0;\r\n        }\r\n\r\n        private boolean\
+        \ matchElement(final String element, final int i, final String candidate)\
+        \ {\r\n            final String[] elements = candidate.split(\"/\");\r\n \
+        \           return elements.length > i && (element.equals(\"_node\") || element.equals(elements[i]));\r\
+        \n        }\r\n    }\r\n\r\n\r\n}"
+      hipposys:loglevel: DEBUG
+      hipposys:logtarget: REPOSITORY
+      hipposys:parameters: ''

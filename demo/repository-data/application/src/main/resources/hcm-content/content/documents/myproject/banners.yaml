@@ -3,6 +3,7 @@
   jcr:mixinTypes: ['hippotranslation:translated', 'mix:referenceable']
   jcr:uuid: 0563615e-74c8-4ce1-89b4-ac82915ebcf3
   hippostd:foldertype: [new-banner-document, new-banner-folder]
+  hippostd:hasfolders: false
   hippotranslation:id: 59cc48bc-e2ef-4543-ac0b-8b685d2c6740
   hippotranslation:locale: en
   /banner1:

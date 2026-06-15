@@ -4,6 +4,7 @@
   jcr:mixinTypes: ['hippotranslation:translated', 'mix:versionable']
   jcr:uuid: 8449c011-c114-4381-b99d-08d3eec98125
   hippostd:foldertype: [new-faq-list, new-faq-item-folder, new-faq-list-folder]
+  hippostd:hasfolders: true
   hippotranslation:id: e9f8f72c-72cc-42a0-952e-4c1b4bd89ce2
   hippotranslation:locale: en
   /about-faq:
@@ -39,6 +40,7 @@
     jcr:uuid: 8ba511c1-98df-4889-9fd1-95f5ea01078a
     hippo:name: About FAQ items
     hippostd:foldertype: [new-faq-item, new-faq-item-folder]
+    hippostd:hasfolders: false
     hippotranslation:id: 5fa82fd6-942c-4269-93e1-8435215549fd
     hippotranslation:locale: en
     /faq-item-1:

@@ -5,3 +5,4 @@
   hippo:name: My Project
   hippostd:foldertype: [new-image-folder]
   hippostd:gallerytype: ['hippogallery:imageset']
+  hippostd:hasfolders: true

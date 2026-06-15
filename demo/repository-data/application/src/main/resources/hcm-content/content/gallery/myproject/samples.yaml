@@ -4,6 +4,7 @@
   jcr:uuid: 46ade216-5851-4854-90ca-46323c617465
   hippostd:foldertype: [new-image-folder]
   hippostd:gallerytype: ['hippogallery:imageset']
+  hippostd:hasfolders: false
   /viognier-grapes-188185_640.jpg:
     jcr:primaryType: hippo:handle
     jcr:mixinTypes: ['mix:referenceable']

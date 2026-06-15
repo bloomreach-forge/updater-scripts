@@ -721,3 +721,4 @@ definitions:
         \          log.error(\"error..\", e)\r\n                    }\r\n        \
         \        })\r\n            }\r\n        }\r\n    }\r\n\r\n\r\n}"
       hipposys:throttle: 1000
+      hipposys:logtarget: REPOSITORY

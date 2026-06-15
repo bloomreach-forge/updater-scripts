@@ -4,6 +4,7 @@
   jcr:mixinTypes: ['hippotranslation:translated', 'mix:referenceable']
   jcr:uuid: e8c83dd6-59dc-4bd6-885e-4d5ab166260f
   hippostd:foldertype: [new-news-document, new-news-folder]
+  hippostd:hasfolders: true
   hippotranslation:id: 89a19fca-b911-4b38-860c-bdce437539af
   hippotranslation:locale: en
   /2020:
@@ -11,6 +12,7 @@
     jcr:mixinTypes: ['hippotranslation:translated', 'mix:referenceable']
     jcr:uuid: 9df258e6-f456-4339-b457-d06bf14506ce
     hippostd:foldertype: [new-news-document, new-news-folder]
+    hippostd:hasfolders: true
     hippotranslation:id: 162bc0d6-cec0-4c04-b116-415568875ff1
     hippotranslation:locale: en
     /10:
@@ -18,6 +20,7 @@
       jcr:mixinTypes: ['hippotranslation:translated', 'mix:referenceable']
       jcr:uuid: 28b233bc-01db-4f28-b463-3d25e7f1e60d
       hippostd:foldertype: [new-news-document, new-news-folder]
+      hippostd:hasfolders: false
       hippotranslation:id: 675369e7-7385-437d-a503-c5aae0c10e93
       hippotranslation:locale: en
       /the-medusa-news:
