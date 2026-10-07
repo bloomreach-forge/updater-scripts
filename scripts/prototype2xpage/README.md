@@ -6,13 +6,12 @@ container items as they are, so editors keep the experience they are used to.
 
 | File | Purpose |
 |---|---|
-| `landing2xpageconversion.groovy` | the script (source of truth) |
-| `landing2xpageconversion.yaml` | updater registry entry to drop into a customer project (generated) |
-| `connector-doctype/` | the fieldless "connector" XPage document type to install in the customer project |
-| `sync-yaml.py` | regenerates the YAML files from the groovy script (`--check` to verify) |
+| `landing2xpageconversion.groovy` | the script |
+| `landing2xpageconversion.yaml` | the same script as an updater registry entry |
 
-The demo project in `../../demo` (brXM 17.3.0) has the updater pre-registered and contains test fixtures under the
-`/p2x/**` sitemap items.
+The script is a starting point: client projects differ, so copy it into the client project and adapt it there.
+The demo project in `../../demo` (brXM 17.3.0) covers the most common case: it has the updater registered, a fieldless
+`myproject:xpagedocument` document type, and test fixtures under the `/p2x/**` sitemap items.
 
 ---
 
@@ -67,13 +66,9 @@ scheduling, versions, requests). The layout and components stay identical, so fo
 like before. Converting pages into "real" content types with their own templates is possible, but in practice it
 confuses editors and changes the site.
 
-Install it in the customer project (rename `myproject` to the project namespace in all files):
-
-* the CND entry from `connector-doctype/xpagedocument.cnd`
-* `connector-doctype/namespaces/xpagedocument.yaml` – the document type (no fields)
-* `connector-doctype/queries/new-xpage-document.yaml` and `new-xpage-folder.yaml` – template queries; XPage folders
-  created by the script get `hippostd:foldertype: [new-xpage-document, new-xpage-folder]`, so editors can only create
-  connector documents there.
+The client project needs such a document type (or whichever type the pages should become) plus a template query for it.
+The demo's `myproject:xpagedocument`, `new-xpage-document` and `new-xpage-folder` are an example. Point
+`defaultXpageDocType`, `documentTemplateCategory` and `folderTypes` at the client's own names.
 
 ### Pages powered by a document (`hst:relativecontentpath`)
 
@@ -182,8 +177,8 @@ The updater run cannot be paused or debugged, so the log is designed to explain 
 
 ## Development
 
-After editing the groovy script run `python3 scripts/prototype2xpage/sync-yaml.py`. Start the demo with auto export
-disabled so test runs do not end up in the demo's YAML:
+When the groovy script changes, update the `hipposys:script` in `landing2xpageconversion.yaml` and in the demo's
+updater registry entry as well. Start the demo with auto export disabled so test runs do not end up in the demo's YAML:
 
 ```
 cd demo && mvn clean verify && mvn -P cargo.run -Drepo.autoexport.allowed=false

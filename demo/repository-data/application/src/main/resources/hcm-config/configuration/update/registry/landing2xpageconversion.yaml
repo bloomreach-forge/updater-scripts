@@ -905,7 +905,7 @@ definitions:
                 String queryPath = "/hippo:configuration/hippo:queries/hippo:templates/" + documentTemplateCategory
                 info("document type      : " + docType + (typeExists ? "" : " (NOT REGISTERED)") + ", template query " + documentTemplateCategory +
                         (session.nodeExists(queryPath) ? "" : " (MISSING: " + queryPath + ")") + ", mode=" + primaryDocumentMode)
-                if (!typeExists) warn("document type " + docType + " is not registered: install the connector document type (see README) or change defaultXpageDocType")
+                if (!typeExists) warn("document type " + docType + " is not registered: add the document type to the project or change defaultXpageDocType")
                 if (!session.nodeExists(queryPath)) warn("template query " + queryPath + " is missing: documents cannot be created with category " + documentTemplateCategory)
                 folderTypes.each { ft ->
                     if (!session.nodeExists("/hippo:configuration/hippo:queries/hippo:templates/" + ft)) warn("folder type template query '" + ft + "' does not exist")
