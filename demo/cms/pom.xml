@@ -18,12 +18,6 @@
       <version>${project.version}</version>
       <type>pom</type>
     </dependency>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <version>5.10.2</version>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
   <build>
     <finalName>cms</finalName>
@@ -42,7 +36,7 @@
       </plugin>
       <plugin>
         <groupId>org.codehaus.cargo</groupId>
-        <artifactId>cargo-maven2-plugin</artifactId>
+        <artifactId>cargo-maven3-plugin</artifactId>
         <configuration>
           <configuration>
             <type>runtime</type>

@@ -22,3 +22,6 @@
 [myproject:newsdocument] > hippostd:relaxed, hippotranslation:translated, myproject:basedocument
   orderable
 
+
+[myproject:xpagedocument] > hippostd:relaxed, hippotranslation:translated, myproject:basedocument
+  orderable

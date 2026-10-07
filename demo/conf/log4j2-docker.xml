@@ -5,7 +5,7 @@
 
     <!-- console -->
     <Console name="console" target="SYSTEM_OUT">
-      <PatternLayout pattern="%d{dd.MM.yyyy HH:mm:ss} %-5p %t [%C{1}.%M:%L] %m%n"/>
+      <PatternLayout pattern="%d{dd.MM.yyyy HH:mm:ss} %-5p %t%notEmpty{ [trace_id=%X{trace_id} span_id=%X{span_id}]} [%C{1}.%M:%L] %m%n"/>
     </Console>
 
   </Appenders>
@@ -17,6 +17,9 @@
     <Logger name="org.hippoecm" level="error"/>
     <Logger name="com.onehippo" level="error"/>
     <Logger name="org.onehippo" level="error"/>
+
+    <!-- OTel/diagnostics logging - surface despite org.hippoecm=error -->
+    <Logger name="org.hippoecm.frontend.diagnosis" level="warn"/>
 
     <!-- audit logging -->
     <Logger additivity="false" name="org.hippoecm.repository.api.Workflow" level="info"/>
@@ -37,7 +40,7 @@
 
     <Logger name="freemarker" level="error"/>
     <Logger name="org.apache.cxf" level="error"/>
-    <Logger name="javax.ws.rs.core" level="error"/>
+    <Logger name="jakarta.ws.rs.core" level="error"/>
     <Logger name="org.apache.commons.pool" level="error"/>
     <Logger name="org.apache.commons.beanutils" level="error"/>
 
@@ -59,6 +62,9 @@
     <!-- Dynamic beans logging -->
     <Logger name="org.hippoecm.hst.content.beans.dynamic" level="info"/>
     <Logger name="org.hippoecm.hst.content.beans.builder" level="info"/>
+
+    <!-- groovy scripts default log level in production -->
+    <Logger name="org.onehippo.repository.update.UpdaterExecutionReport" level="info"/>
 
     <!-- project logging -->
     <Logger name="org.example" level="info"/>

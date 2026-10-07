@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>org.example</groupId>
@@ -13,18 +14,18 @@
 
   <dependencies>
     <dependency>
-      <groupId>javax.servlet.jsp</groupId>
-      <artifactId>jsp-api</artifactId>
+      <groupId>jakarta.servlet.jsp</groupId>
+      <artifactId>jakarta.servlet.jsp-api</artifactId>
     </dependency>
 
     <dependency>
-      <groupId>org.apache.taglibs</groupId>
-      <artifactId>taglibs-standard-spec</artifactId>
+      <groupId>com.bloomreach.xm</groupId>
+      <artifactId>taglibs-standard-spec-jakarta</artifactId>
     </dependency>
 
     <dependency>
-      <groupId>org.apache.taglibs</groupId>
-      <artifactId>taglibs-standard-impl</artifactId>
+      <groupId>com.bloomreach.xm</groupId>
+      <artifactId>taglibs-standard-impl-jakarta</artifactId>
     </dependency>
 
     <dependency>
@@ -43,16 +44,11 @@
       <artifactId>hippo-plugin-selections-hst-client</artifactId>
     </dependency>
 
-    <dependency>
-      <groupId>com.onehippo.cms7</groupId>
-      <artifactId>hippo-enterprise-package-site-dependencies</artifactId>
-      <type>pom</type>
-    </dependency>
-
   </dependencies>
   <build>
     <resources>
       <resource>
+        <filtering>false</filtering>
         <directory>src/main/java</directory>
         <includes>
           <include>**/*.properties</include>
