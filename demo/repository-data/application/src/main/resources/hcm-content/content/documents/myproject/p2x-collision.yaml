@@ -1,0 +1,36 @@
+# p2x fixture: a regular (non-XPage) document that sits where the converter wants to create xpages/p2x/collision
+/content/documents/myproject/xpages:
+  jcr:primaryType: hippostd:folder
+  jcr:mixinTypes: ['hippotranslation:translated', 'mix:referenceable']
+  hippostd:foldertype: [new-content-document, new-content-folder]
+  hippotranslation:id: 5d1f7d33-2a7a-4b4c-9a5e-0c8c2f3a0001
+  hippotranslation:locale: en
+  /p2x:
+    jcr:primaryType: hippostd:folder
+    jcr:mixinTypes: ['hippotranslation:translated', 'mix:referenceable']
+    hippostd:foldertype: [new-content-document, new-content-folder]
+    hippotranslation:id: 5d1f7d33-2a7a-4b4c-9a5e-0c8c2f3a0002
+    hippotranslation:locale: en
+    /collision:
+      jcr:primaryType: hippo:handle
+      jcr:mixinTypes: ['hippo:named', 'mix:referenceable']
+      hippo:name: Collision
+      /collision:
+        jcr:primaryType: myproject:contentdocument
+        jcr:mixinTypes: ['mix:referenceable']
+        hippo:availability: [live, preview]
+        hippostd:holder: admin
+        hippostd:state: published
+        hippostdpubwf:createdBy: admin
+        hippostdpubwf:creationDate: 2026-01-01T00:00:00+00:00
+        hippostdpubwf:lastModificationDate: 2026-01-01T00:00:00+00:00
+        hippostdpubwf:lastModifiedBy: admin
+        hippostdpubwf:publicationDate: 2026-01-01T00:00:00+00:00
+        hippotranslation:id: 5d1f7d33-2a7a-4b4c-9a5e-0c8c2f3a0003
+        hippotranslation:locale: en
+        myproject:introduction: A regular document blocking the converter's target path.
+        myproject:publicationdate: 2026-01-01T00:00:00+00:00
+        myproject:title: Collision
+        /myproject:content:
+          jcr:primaryType: hippostd:html
+          hippostd:content: <html><body><p>collision</p></body></html>

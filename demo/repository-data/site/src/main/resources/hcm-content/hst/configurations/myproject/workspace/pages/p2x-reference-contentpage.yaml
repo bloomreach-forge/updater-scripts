@@ -1,0 +1,7 @@
+# p2x fixture: page whose container is an hst:containercomponentreference into hst:workspace/hst:containers
+/hst:hst/hst:configurations/myproject/hst:workspace/hst:pages/p2x-reference-contentpage:
+  jcr:primaryType: hst:component
+  hst:referencecomponent: hst:abstractpages/base
+  /main:
+    jcr:primaryType: hst:containercomponentreference
+    hst:referencecomponent: contentpage/main

@@ -71,7 +71,7 @@
                maxThreads="@tomcat.max.threads@"
                redirectPort="8443"
                maxParameterCount="1000"
-    />
+               />
     <!-- A "Connector" using the shared thread pool-->
     <!--
     <Connector executor="tomcatThreadPool"

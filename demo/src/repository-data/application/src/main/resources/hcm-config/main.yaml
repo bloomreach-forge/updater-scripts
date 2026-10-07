@@ -1,5 +1,0 @@
-definitions:
-  namespace:
-    myproject:
-      uri: http://www.myproject.com/myproject/nt/1.0
-      cnd: namespaces/myproject.cnd

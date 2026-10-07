@@ -3,9 +3,9 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.onehippo.cms7</groupId>
-    <artifactId>hippo-cms7-enterprise-release</artifactId>
-    <version>16.3.1</version>
+    <groupId>org.onehippo.cms7</groupId>
+    <artifactId>hippo-cms7-release</artifactId>
+    <version>17.3.0</version>
   </parent>
 
   <name>My Project</name>
@@ -22,20 +22,22 @@
     DO NOT remove these tags but instead fill them in appropriately as needed,
     UNLESS the inherited values are valid for your project.
   -->
-  <organization />
+  <url/>
+  <inceptionYear/>
+  <organization/>
   <licenses>
-    <license />
+    <license/>
   </licenses>
   <mailingLists>
-    <mailingList />
+    <mailingList/>
   </mailingLists>
   <developers>
-    <developer />
+    <developer/>
   </developers>
   <contributors>
-    <contributor />
+    <contributor/>
   </contributors>
-  <issueManagement />
+  <issueManagement/>
   <!--
   <scm>
     <connection/>
@@ -43,7 +45,7 @@
     <url/>
   </scm>
   -->
-  <ciManagement />
+  <ciManagement/>
   <distributionManagement>
     <repository>
       <id>-</id>
@@ -61,13 +63,13 @@
     <!--***START temporary override of versions*** -->
     <!-- ***END temporary override of versions*** -->
 
-    <essentials.version>16.3.1</essentials.version>
+    <essentials.version>17.3.0</essentials.version>
 
     <development-module-deploy-dir>shared/lib</development-module-deploy-dir>
 
     <docker.postgres.bind.1>${project.basedir}/target/postgres-data:/var/lib/postgresql/data</docker.postgres.bind.1>
 
-    <hippo.cms.locales>nl,de,fr,es,zh</hippo.cms.locales>
+    <hippo.cms.locales>nl,de,fr,es</hippo.cms.locales>
     <buildNumber>${maven.build.timestamp}</buildNumber>
   </properties>
 
@@ -76,15 +78,13 @@
       <id>bloomreach-maven2</id>
       <name>Bloomreach Maven 2</name>
       <url>https://maven.bloomreach.com/repository/maven2</url>
-    </repository>
-    <repository>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
       <releases>
         <updatePolicy>never</updatePolicy>
         <checksumPolicy>fail</checksumPolicy>
       </releases>
-      <id>bloomreach-maven2-enterprise</id>
-      <name>Bloomreach Maven 2 Enterprise</name>
-      <url>https://maven.bloomreach.com/repository/maven2-enterprise</url>
     </repository>
   </repositories>
 
@@ -93,6 +93,7 @@
       <dependency>
         <groupId>jakarta.servlet.jsp</groupId>
         <artifactId>jakarta.servlet.jsp-api</artifactId>
+        <version>${jsp-api.version}</version>
         <scope>provided</scope>
       </dependency>
 
@@ -100,12 +101,14 @@
       <dependency>
         <groupId>com.bloomreach.xm</groupId>
         <artifactId>taglibs-standard-spec-jakarta</artifactId>
+        <version>${taglibs.version}</version>
         <scope>runtime</scope>
       </dependency>
 
       <dependency>
         <groupId>com.bloomreach.xm</groupId>
         <artifactId>taglibs-standard-impl-jakarta</artifactId>
+        <version>${taglibs.version}</version>
         <scope>runtime</scope>
       </dependency>
 
@@ -143,7 +146,7 @@
                     <versionRange>[0.0,)</versionRange>
                   </pluginExecutionFilter>
                   <action>
-                    <ignore />
+                    <ignore/>
                   </action>
                 </pluginExecution>
               </pluginExecutions>
@@ -271,6 +274,10 @@
 
     <profile>
       <id>cargo.run</id>
+      <properties>
+        <!-- Already defined in the cms project POM. Override here for your project, if necessary -->
+        <!-- <repo.bootstrap>true</repo.bootstrap> -->
+      </properties>
       <dependencies>
         <dependency>
           <groupId>jakarta.xml.bind</groupId>
@@ -391,28 +398,8 @@
       <id>dist</id>
       <dependencies>
         <dependency>
-          <groupId>jakarta.xml.bind</groupId>
-          <artifactId>jakarta.xml.bind-api</artifactId>
-          <scope>provided</scope>
-        </dependency>
-        <dependency>
-          <groupId>jakarta.xml.ws</groupId>
-          <artifactId>jakarta.xml.ws-api</artifactId>
-          <scope>provided</scope>
-        </dependency>
-        <dependency>
-          <groupId>jakarta.activation</groupId>
-          <artifactId>jakarta.activation-api</artifactId>
-          <scope>provided</scope>
-        </dependency>
-        <dependency>
-          <groupId>org.glassfish.jaxb</groupId>
-          <artifactId>jaxb-runtime</artifactId>
-          <scope>provided</scope>
-        </dependency>
-        <dependency>
           <groupId>org.apache.logging.log4j</groupId>
-          <artifactId>log4j-slf4j-impl</artifactId>
+          <artifactId>log4j-slf4j2-impl</artifactId>
           <scope>provided</scope>
         </dependency>
         <dependency>
@@ -460,7 +447,7 @@
       <dependencies>
         <dependency>
           <groupId>org.apache.logging.log4j</groupId>
-          <artifactId>log4j-slf4j-impl</artifactId>
+          <artifactId>log4j-slf4j2-impl</artifactId>
           <scope>provided</scope>
         </dependency>
         <dependency>
@@ -502,7 +489,6 @@
         </plugins>
       </build>
     </profile>
-
   </profiles>
 
 </project>

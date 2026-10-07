@@ -1,0 +1,46 @@
+# p2x fixtures for the landing page -> XPage conversion script (see scripts/prototype2xpage/README.md)
+/hst:hst/hst:configurations/myproject/hst:workspace/hst:sitemap/p2x:
+  jcr:primaryType: hst:sitemapitem
+  hst:componentconfigurationid: hst:pages/p2x-shared-contentpage
+  hst:pagetitle: P2X fixtures
+  /shared-a:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/p2x-shared-contentpage
+    hst:pagetitle: Shared page A
+  /shared-b:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/p2x-shared-contentpage
+    hst:pagetitle: Shared page B
+  /absolute-path:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/barlv2-contentpage
+    hst:relativecontentpath: /content/sample-document
+    hst:pagetitle: Absolute relative content path
+  /container-reference:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/p2x-reference-contentpage
+    hst:relativecontentpath: content/another-sample-document
+  /with-refid:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/p2x-shared-contentpage
+    hst:refId: p2x-with-refid
+    hst:pagetitle: Item with own properties (stays explicit)
+  /two-columns:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/p2x-twocolumns-page
+    hst:pagetitle: Two columns
+  /no-match:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/p2x-nomatch-page
+  /missing-page:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/p2x-does-not-exist
+  /collision:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/p2x-shared-contentpage
+  /wild:
+    jcr:primaryType: hst:sitemapitem
+    /_default_:
+      jcr:primaryType: hst:sitemapitem
+      hst:componentconfigurationid: hst:pages/p2x-shared-contentpage
+      hst:relativecontentpath: content/${1}
