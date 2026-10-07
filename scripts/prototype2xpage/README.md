@@ -1,134 +1,190 @@
-Check: readme.pdf and landing2xpageconversion.yaml
+# Landing page → Experience Page (XPage) conversion
 
-In the example project, you can already go to the updater script and execute landing2xpageconversion script.
+`landing2xpageconversion.groovy` is a brXM **17.x** repository updater. It turns the landing pages that editors built in a
+channel (workspace `hst:pages` + `hst:sitemap` items) into Experience Page documents, keeping the page layout and the
+container items as they are, so editors keep the experience they are used to.
 
-The configuration script can be run locally to add the correct configuration to hst configuration. 
-Only the Conversion script is required in remote environments. 
-The conversion script should also convert configuration but may have issues with hst inheritance and hst:pages that do not map 1:1 to a hst:prototypepage.
+| File | Purpose |
+|---|---|
+| `landing2xpageconversion.groovy` | the script (source of truth) |
+| `landing2xpageconversion.yaml` | updater registry entry to drop into a customer project (generated) |
+| `connector-doctype/` | the fieldless "connector" XPage document type to install in the customer project |
+| `sync-yaml.py` | regenerates the YAML files from the groovy script (`--check` to verify) |
 
-Running Locally
-===============
+The demo project in `../../demo` (brXM 17.3.0) has the updater pre-registered and contains test fixtures under the
+`/p2x/**` sitemap items.
 
-This project uses the Maven Cargo plugin to run Essentials, the CMS and site locally in Tomcat.
-From the project root folder, execute:
+---
 
-    mvn clean verify
-    mvn -P cargo.run
+## Why steps
 
-By default this includes and bootstraps repository data from the repository-data/development module,
-which is deployed by cargo to the Tomcat shared/lib.
-If you want or need to start *without* bootstrapping the development data, for example when testing
-against an existing repository, you can specify the *additional* Maven profile without-development-data to do so:
+Customer HST structures differ a lot: inherited configurations, container references, pages shared by many sitemap
+items, absolute content paths, name collisions in the content tree, preview configurations with unpublished changes...
+Running everything in one go made every failure a half converted channel. The conversion is therefore split into
+separate steps that you run one at a time and verify in between:
 
-    mvn -P cargo.run,without-development-data
+| Step | Writes | What it does |
+|---|---|---|
+| `analyze` *(default)* | nothing | Builds the model and logs, per sitemap item: the resolved page, the chosen layout and how every container maps, the target document and whether it collides, plus warnings (components that rely on the content bean, missing documents, preview configuration, missing doc type / template query). |
+| `templates` | HST config | Copies `hst:prototypepages` into `hst:xpages` layouts. Existing layouts are never overwritten unless `overwriteXPageTemplates=true`. With `generateMissingTemplates=true` it also creates a layout for every page structure that no layout can host. |
+| `convert` | content | Creates one XPage document per convertible sitemap item under `<content root>/<xPageFolder>/<sitemap path>` and copies the landing page's container items into it. **Deletes nothing.** Existing XPage documents are skipped (`existingDocument`). |
+| `sitemap` | HST config | Adds a hidden `<xPageFolder>/**` sitemap subtree so XPages that editors create *later* get a URL. Existing items are never modified. Optional. |
+| `cleanup` | HST config | For each sitemap item whose XPage document is published: removes `hst:componentconfigurationid` and points `hst:relativecontentpath` at the document, so the URL stays exactly the same. Then deletes the workspace pages that no sitemap item uses anymore (a full dump of each deleted page is logged first). Inherited / non-workspace pages are never deleted. |
 
-This additional profile will modify the target location for the development module to the Tomcat temp/ folder so that
-it won't be seen and picked up during the repository bootstrap process.
+Recommended sequence:
 
-Access the Bloomreach setup application at <http://localhost:8080/essentials>.
-After your project is set up, access the CMS at <http://localhost:8080/cms> and the site at <http://localhost:8080/myproject>.
-Logs are located in target/tomcat9x/logs
+1. `analyze` – read the report, fix what it flags (template mapping, doc type, preview configuration...).
+2. `templates` – usually locally; export the resulting `hst:xpages` to the project's HCM config and deploy it.
+3. `analyze` again – every item should now say `CONVERT` or have a skip reason you accept.
+4. `convert` – then check the new documents in the Experience manager. The site still serves the old pages.
+5. `cleanup` – switches the URLs to the XPage documents.
+6. Optionally `sitemap`.
 
+Every step can be re-run: already converted items are reported as `ALREADY_CONVERTED` / `SKIP_EXISTING_DOCUMENT`.
+Several steps can be combined (`"steps": "convert,cleanup"`); they always execute in the order above.
 
-Best Practice for Development
-=============================
+Use `includePaths` and `limit` to convert a large channel in batches.
 
-Use the option `-Drepo.path=/some/path/to/repository` during start up. This will avoid
-your repository to be cleared when you do a mvn clean.
+### Mutating steps refuse to run when...
 
-For example start your project with:
+* a `<config>-preview` configuration exists (it may hold unpublished channel changes). Publish/discard the changes in
+  the Experience manager first, or set `discardPreviewConfiguration=true` to delete it.
+* the updater's **Dry run** checkbox is ticked: a dry run only ever executes `analyze`.
 
-    mvn -P cargo.run -Drepo.path=/home/usr/tmp/repo
+### Resetting a test environment
 
+Do not try to undo a conversion with another script. Restore the repository instead – for the demo:
+`mvn clean verify` (removes `target/storage`) followed by `mvn -P cargo.run`. On a customer environment: restore the
+database backup taken before the run.
 
-Automatic Export
-================
+---
 
-Automatic export of repository changes to the filesystem is turned on by default. To control this behavior, log into
-<http://localhost:8080/cms/console> and press the "Enable/Disable Auto Export" button at the top right. To set this
-as the default for your project edit the file
-./repository-data/application/src/main/resources/hcm-config/configuration/modules/autoexport-module.yaml
+## Target document type: the connector document
 
+By default every page is converted into **one fieldless document type** (`<ns>:xpagedocument`). It carries no content;
+it only exists to connect the page to the document workflow that Experience Pages bring (drafts, publication,
+scheduling, versions, requests). The layout and components stay identical, so for editors the page looks and behaves
+like before. Converting pages into "real" content types with their own templates is possible, but in practice it
+confuses editors and changes the site.
 
-Building Distributions
-======================
+Install it in the customer project (rename `myproject` to the project namespace in all files):
 
-To build Tomcat distribution tarballs:
+* the CND entry from `connector-doctype/xpagedocument.cnd`
+* `connector-doctype/namespaces/xpagedocument.yaml` – the document type (no fields)
+* `connector-doctype/queries/new-xpage-document.yaml` and `new-xpage-folder.yaml` – template queries; XPage folders
+  created by the script get `hippostd:foldertype: [new-xpage-document, new-xpage-folder]`, so editors can only create
+  connector documents there.
 
-    mvn clean verify
-    mvn -P dist
-      or
-    mvn -P dist-with-development-data
+### Pages powered by a document (`hst:relativecontentpath`)
 
-The `dist` profile will produce in the /target directory a distribution tarball, containing the main deployable wars and
-shared libraries.
+* `primaryDocumentMode: "connector"` *(default)*: a connector document is created, the original content document is left
+  untouched. **Caveat:** after conversion the content bean of the page is the connector document. Components that read
+  `getContentBean()` (no explicit `document` parameter, e.g. `EssentialsContentComponent`) will render empty. `analyze`
+  lists these components per page (`CONTENT BEAN` warning).
+* `primaryDocumentMode: "mixin"`: the XPage is added to the existing content document itself (its type must allow
+  `hst:xpagemixin`). Use this for the pages flagged above – a mixed run is fine:
+  `{"steps": "convert", "primaryDocumentMode": "mixin", "includePaths": "products/details"}` first, then the normal run.
 
-The `dist-with-development-data` profile will produce a distribution-with-development-data tarball, also containing the
-repository-data-development jar in the shared/lib directory. This kind of distribution is meant to be used for
-deployments to development environments, for instance local deployments or deployments to a continuous integration (CI)
-system. (Initially, this module contains only "author" and "editor" example users for use in testing. Other data must be
-placed in this module explicitly by developers, for demo or testing purposes, etc.)
+### Customization hooks
 
-See also src/main/assembly/*.xml if you need to customize the distributions.
+The script has a marked `CUSTOMIZATION HOOKS` block. Client forks only change those methods, so upstream fixes can be
+merged with a plain diff:
 
+* `populateDocumentVariant(variant, item, ctx)` – write document fields before save/publish
+* `keepContainerItem(containerItem, item)` – return `false` to leave an item out (e.g. because a field replaces it)
 
-Distributing Additional Site Projects
-=====================================
+---
 
-Note that if your organization is using multiple site projects, you must configure the assembly of a distribution to
-include all of the separate site webapps for deployment. This project is designed for stand-alone use and does not
-automatically include any additional, externally-maintained site webapps.
+## How pages are matched to layouts
 
+For each landing page, every layout is scored by mapping each landing container to a layout container by
+**`hippo:identifier`**, then **relative path** (`main/content/left`), then a **unique container name**. A layout wins when
+all containers map without two landing containers landing in the same layout container; ties are broken by equal
+static structure, then equal `hst:referencecomponent`, then name (deterministic).
 
-Running the brXM Project in a Docker Container
-======================
+Nothing is ever dropped silently: a page with unmatched or colliding containers is skipped with
+`SKIP_UNMATCHED_CONTAINER` unless you choose `templateMapping`, `fallbackXPageTemplate`,
+`unmatchedContainers: "merge-into-primary"` or `generateMissingTemplates`.
 
-To run the brXM project in a docker container, you must install the project, build the docker image and run the docker
-image respectively.
+Container references (`hst:containercomponentreference`) are resolved to `hst:workspace/hst:containers`. Pages are
+resolved in the workspace, the configuration and the `hst:inheritsfrom` configurations.
 
-First install the project:
+---
 
-    mvn clean install
+## Running the updater
 
-Then build the brXM docker image:
+*Setup → System → Updater editor*, select **XPath query** and query **only** the configurations node of the runtime
+HST root:
 
-    mvn -Pdocker.build
+```
+/jcr:root/hst:myproject/hst:configurations
+```
 
-This maven profile will create a docker image and add it to the local docker registry. The new image will be tagged
-as org.example/myproject:0.1.0-SNAPSHOT
+The runtime HST root is the site's `hstRoot` (`hcm-site.yaml`, `hst.configuration.rootPath`), not the `/hst:hst`
+prefix used inside HCM YAML files. Do not use "Repository path": that makes the updater visit every HST node.
+Log target `REPOSITORY` keeps the output in the updater history; set log level to `INFO` (the script has its own levels).
 
-To run the image with in-memory h2 database:
+### Parameters
 
-    mvn -Pdocker.run
+| Parameter | Default | Meaning |
+|---|---|---|
+| `hstConfigurations` | – (required) | comma separated configuration names (`hstConfiguration` also accepted) |
+| `steps` | `analyze` | `analyze`, `templates`, `sitemap`, `convert`, `cleanup` (comma separated) |
+| `defaultXpageDocType` | – (required for convert) | e.g. `myproject:xpagedocument` |
+| `primaryDocumentMode` | `connector` | `connector` or `mixin`, see above |
+| `xPageFolder` | `xpages` | folder below the content root that receives the documents |
+| `documentTemplateCategory` | `new-xpage-document` | template query used by the folder workflow to add documents |
+| `folderTypes` | `["new-xpage-document","new-xpage-folder"]` | added to `hippostd:foldertype` of the XPage folders |
+| `contentRootPath` | from `hst:site` | content root override when the site cannot be resolved |
+| `templateMapping` | `{}` | `{"<sitemap path or page name>": "<layout>"}` explicit overrides |
+| `fallbackXPageTemplate` | – | layout used when no layout matches |
+| `unmatchedContainers` | `skip-page` | `skip-page` or `merge-into-primary` |
+| `existingDocument` | `skip` | `skip`, `reapply` (re-copy the layout into the existing XPage) or `recreate` (delete + create) |
+| `publish` | `true` | publish converted documents (`publishPages` also accepted) |
+| `publishPendingChanges` | `false` | also publish existing documents that had unpublished editor changes |
+| `titleProperty` | – | document property to fill with the sitemap item's `hst:pagetitle` (e.g. `acm:title`) |
+| `setDisplayName` | `true` | use `hst:pagetitle` as the document display name |
+| `parseInheritedHstConfiguration` | `false` | also convert prototype pages of inherited configurations |
+| `overwriteXPageTemplates` | `false` | let `templates` replace existing layouts |
+| `generateMissingTemplates` | `false` | let `templates` derive layouts from pages that nothing else can host |
+| `discardPreviewConfiguration` | `false` | delete `<config>-preview` instead of aborting |
+| `cleanupUnpublished` | `false` | let `cleanup` repoint items whose XPage is not published yet |
+| `includePaths` | – | only handle these sitemap paths (and below) |
+| `limit` | `0` | convert at most N items per run |
+| `logLevel` | `item` | `summary`, `item` or `trace` |
+| `progressEvery` | `25` | progress / ETA line every N items |
+| `reportToRepository` | `false` | also store each step report under `/p2x-reports` |
 
+### Mapping earlier customer forks to parameters
 
-Running with an embedded MySQL database. To create & run environment containing builtin MySQL DB just run:
+| Fork | Customization | Now |
+|---|---|---|
+| ACM | `new-ExperiencePage-document` category, `acm:title` from page title, absolute content paths | `documentTemplateCategory`, `folderTypes`, `titleProperty`; absolute paths are handled |
+| TPCI | remap containers onto existing layouts, `hst:xtype` / `hst:label` differences | identifier/path/name mapping, `templateMapping` |
+| CIBC | everything into `simple-content`, shared pages, partial failures | `fallbackXPageTemplate` (+ `merge-into-primary`), reference-counted cleanup, per-item save/refresh |
 
-    mvn -Pdocker.run,docker.mysql
+---
 
-As a result, default db credentials will be used (admin/admin) and DB name will be the same as project's artifactId (e.g. myproject)
+## Logging
 
-Running with an embedded PostgreSQL database. To create & run environment containing builtin PostgreSQL DB just run:
+The updater run cannot be paused or debugged, so the log is designed to explain every decision:
 
-    mvn -Pdocker.run,docker.postgres
+* every line is prefixed `[P2X][<configuration>][<step>][<n>/<total>][<sitemap path>]` – grep one item across steps;
+* every item ends with `OUTCOME status=<UPDATED|SKIPPED|FAILED|...> reason=<CODE> detail=...` using stable reason codes
+  (`SKIP_NO_PAGE`, `SKIP_NO_TEMPLATE`, `SKIP_UNMATCHED_CONTAINER`, `SKIP_TARGET_CONFLICT`, `SKIP_EXISTING_DOCUMENT`,
+  `ALREADY_CONVERTED`, `CONVERTED`, `SITEMAP_ITEM_REPOINTED`, `PAGE_DELETED`, `FAIL_WORKFLOW`, `FAIL_REPOSITORY`, ...);
+* `analyze` prints a fixed-width table (sitemap item | page | layout | target | result);
+* every step ends with a summary and a JSON report between `P2X-REPORT-BEGIN` / `P2X-REPORT-END` that can be diffed between runs;
+* everything deleted is dumped to the log first; `logLevel: "trace"` adds layout scoring and full node dumps;
+* an error on one item is logged with its context, the session is refreshed and the next item continues.
 
-As a result, default db credentials will be used (admin/admin) and DB name will be the same as project's artifactId (e.g. myproject)
+---
 
-To run the image with an external mysql database, add the provided database name, username and password below to the properties
-section of your project's pom.xml:
+## Development
 
-    <docker.db.host>DATABASE_HOSTNAME</docker.db.host>
-    <docker.db.port>DATABASE_PORT</docker.db.port>
-    <docker.db.schema>DATABASE_NAME</docker.db.schema>
-    <docker.db.username>DATABASE_USERNAME</docker.db.username>
-    <docker.db.password>DATABASE_PASSWORD</docker.db.password>
+After editing the groovy script run `python3 scripts/prototype2xpage/sync-yaml.py`. Start the demo with auto export
+disabled so test runs do not end up in the demo's YAML:
 
-Then run:
-
-    mvn -Pdocker.run,mysql
-
-To run the image with an external postgresql database, add the same db properties as above, then run:
-
-    mvn -Pdocker.run,postgres
-
-After running the docker image, application logs will be shown on the terminal window.
+```
+cd demo && mvn clean verify && mvn -P cargo.run -Drepo.autoexport.allowed=false
+```

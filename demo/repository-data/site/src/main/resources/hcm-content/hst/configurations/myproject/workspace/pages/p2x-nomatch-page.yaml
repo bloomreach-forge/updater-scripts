@@ -1,0 +1,17 @@
+# p2x fixture: container structure that matches no prototype / layout
+/hst:hst/hst:configurations/myproject/hst:workspace/hst:pages/p2x-nomatch-page:
+  jcr:primaryType: hst:component
+  hst:referencecomponent: hst:abstractpages/base
+  /sidebar:
+    jcr:primaryType: hst:containercomponent
+    hst:xtype: hst.vbox
+  /body:
+    jcr:primaryType: hst:containercomponent
+    hst:xtype: hst.vbox
+    /banner:
+      jcr:primaryType: hst:containeritemcomponent
+      hst:componentclassname: org.onehippo.cms7.essentials.components.EssentialsBannerComponent
+      hst:label: Banner
+      hst:parameternames: [document, org.hippoecm.hst.core.component.template]
+      hst:parametervalues: [banners/banner1, 'webfile:/freemarker/hstdefault/essentials-banner.ftl']
+      hst:template: essentials-banner

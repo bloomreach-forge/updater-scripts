@@ -1,0 +1,7 @@
+<'myproject'='http://www.myproject.com/myproject/nt/1.0'>
+<'hippostd'='http://www.onehippo.org/jcr/hippostd/nt/2.0'>
+<'hippotranslation'='http://www.onehippo.org/jcr/hippotranslation/nt/1.0'>
+
+// add to the project's CND; myproject:basedocument is the project's base document type
+[myproject:xpagedocument] > hippostd:relaxed, hippotranslation:translated, myproject:basedocument
+  orderable

@@ -1,0 +1,32 @@
+# p2x fixture: containers nested under static components, identifiers differ from the two-columns prototype
+/hst:hst/hst:configurations/myproject/hst:workspace/hst:pages/p2x-twocolumns-page:
+  jcr:primaryType: hst:component
+  hst:referencecomponent: hst:abstractpages/base
+  /main:
+    jcr:primaryType: hst:component
+    /content:
+      jcr:primaryType: hst:component
+      hst:template: two-columns.main.content
+      hst:componentclassname: test123
+      /left-container:
+        jcr:primaryType: hst:containercomponent
+        hippo:identifier: 0f5a9b0e-1c43-4d5e-9a51-2a0d0c1e0a01
+        hst:xtype: hst.vbox
+        /banner:
+          jcr:primaryType: hst:containeritemcomponent
+          hst:componentclassname: org.onehippo.cms7.essentials.components.EssentialsBannerComponent
+          hst:label: Banner
+          hst:parameternames: [document, org.hippoecm.hst.core.component.template]
+          hst:parametervalues: [banners/banner1, 'webfile:/freemarker/hstdefault/essentials-banner.ftl']
+          hst:template: essentials-banner
+      /right-container:
+        jcr:primaryType: hst:containercomponent
+        hippo:identifier: 0f5a9b0e-1c43-4d5e-9a51-2a0d0c1e0a02
+        hst:xtype: hst.vbox
+        /simplecontent:
+          jcr:primaryType: hst:containeritemcomponent
+          hst:componentclassname: org.onehippo.cms7.essentials.components.EssentialsDocumentComponent
+          hst:label: Simple Content
+          hst:parameternames: [document, org.hippoecm.hst.core.component.template]
+          hst:parametervalues: [content/another-sample-document, 'webfile:/freemarker/hstdefault/contentpage-main.ftl']
+          hst:template: contentpage-main
