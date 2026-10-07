@@ -9,9 +9,54 @@ container items as they are, so editors keep the experience they are used to.
 | `landing2xpageconversion.groovy` | the script |
 | `landing2xpageconversion.yaml` | the same script as an updater registry entry |
 
-The script is a starting point, real projects differ, so copy it into your project and adapt it from there.
+The script is a starting point, real projects differ. You should copy it into your project and adapt it from there.
 The demo project in `../../demo` (brXM 17.3.0) covers the most common case: it has the updater registered, a fieldless
 `myproject:xpagedocument` document type, and test fixtures under the `/p2x/**` sitemap items.
+
+---
+
+## Running the updater
+
+*Setup → System → Updater editor*, select **XPath query** and query **only** the configurations node of the runtime
+HST root:
+
+```
+/jcr:root/hst:myproject/hst:configurations
+```
+
+Set log level to `INFO` (the script has its own levels).
+
+### Parameters
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `hstConfigurations` | – (required) | comma separated configuration names (`hstConfiguration` also accepted) |
+| `steps` | `analyze` | `analyze`, `templates`, `convert`, `sitemap`, `cleanup` (comma separated) |
+| `defaultXpageDocType` | – (required for convert) | e.g. `myproject:xpagedocument` |
+| `primaryDocumentMode` | `connector` | `connector` or `mixin`, see above |
+| `xPageFolder` | `xpages` | folder below the content root that receives the documents |
+| `documentTemplateCategory` | `new-xpage-document` | template query used by the folder workflow to add documents |
+| `folderTypes` | `["new-xpage-document","new-xpage-folder"]` | added to `hippostd:foldertype` of the XPage folders |
+| `contentRootPath` | from `hst:site` | content root override when the site cannot be resolved |
+| `templateMapping` | `{}` | `{"<sitemap path or page name>": "<layout>"}` explicit overrides |
+| `fallbackXPageTemplate` | – | layout used when no layout matches |
+| `unmatchedContainers` | `skip-page` | `skip-page` or `merge-into-primary` |
+| `existingDocument` | `skip` | `skip`, `reapply` (re-copy the layout into the existing XPage) or `recreate` (delete + create) |
+| `publish` | `true` | publish converted documents (`publishPages` also accepted) |
+| `publishPendingChanges` | `false` | also publish existing documents that had unpublished editor changes |
+| `titleProperty` | – | document property to fill with the sitemap item's `hst:pagetitle` (e.g. `acm:title`) |
+| `setDisplayName` | `true` | use `hst:pagetitle` as the document display name |
+| `parseInheritedHstConfiguration` | `false` | also convert prototype pages of inherited configurations |
+| `overwriteXPageTemplates` | `false` | let `templates` replace existing layouts |
+| `generateMissingTemplates` | `false` | let `templates` derive layouts from pages that nothing else can host |
+| `discardPreviewConfiguration` | `true` | delete `<config>-preview` before writing; `false` aborts instead |
+| `cleanupUnpublished` | `false` | let `cleanup` repoint/remove items whose XPage is not published yet |
+| `sitemapStrategy` | `wildcard` | `wildcard` (remove converted items, URLs via the `_default_` chain) or `explicit` (keep and repoint them) |
+| `includePaths` | – | only handle these sitemap paths (and below) |
+| `limit` | `0` | convert at most N items per run |
+| `logLevel` | `item` | `summary`, `item` or `trace` |
+| `progressEvery` | `25` | progress / ETA line every N items |
+| `reportToRepository` | `false` | also store each step report under `/p2x-reports` |
 
 ---
 
@@ -48,12 +93,13 @@ Use `includePaths` and `limit` to convert a large channel in batches.
 
 * a `<config>-preview` configuration exists and `discardPreviewConfiguration=false`. By default the preview
   configuration is deleted (with a warning and a dump in the log) before the step runs, so unpublished channel changes
-  are lost – publish or discard them in the Experience manager first, or set `discardPreviewConfiguration=false` to
+  are lost. Publish or discard them in the Experience manager first, or set `discardPreviewConfiguration=false` to
   make the script stop instead.
 * the updater's **Dry run** checkbox is ticked: a dry run only ever executes `analyze`.
 
 ### Sitemap strategy
 
+`sitemapStrategy: "explicit"` – every converted item stays, pointing at its document.
 `sitemapStrategy: "wildcard"` *(default)* – the URL of an XPage is its path in the XPage folder:
 
 ```
@@ -78,27 +124,25 @@ A converted item is kept (and repointed instead) when:
 
 `analyze` shows per item which of the two will happen (`sitemap :` line).
 
-`sitemapStrategy: "explicit"` – every converted item stays, pointing at its document (the old behaviour).
-
 ### Resetting a test environment
 
-Do not try to undo a conversion with another script. Restore the repository instead – for the demo:
-`mvn clean verify` (removes `target/storage`) followed by `mvn -P cargo.run`. On a customer environment: restore the
-database backup taken before the run.
+To reset after a script execution in the demo run:
+`mvn clean verify` (removes `target/storage`) followed by `mvn -P cargo.run`. 
+On a real environment: restore the database backup taken before the run.
 
 ---
 
 ## Target document type: the connector document
 
-By default every page is converted into **one fieldless document type** (`<ns>:xpagedocument`). It carries no content;
+By default, every page is converted into **one fieldless document type** (`<ns>:xpagedocument`). It carries no content;
 it only exists to connect the page to the document workflow that Experience Pages bring (drafts, publication,
 scheduling, versions, requests). The layout and components stay identical, so for editors the page looks and behaves
 like before. Converting pages into "real" content types with their own templates is possible, but in practice it
 confuses editors and changes the site.
 
-The client project needs such a document type (or whichever type the pages should become) plus a template query for it.
+A real project needs such a document type (or whichever type the pages should become) plus a template query for it.
 The demo's `myproject:xpagedocument`, `new-xpage-document` and `new-xpage-folder` are an example. Point
-`defaultXpageDocType`, `documentTemplateCategory` and `folderTypes` at the client's own names.
+`defaultXpageDocType`, `documentTemplateCategory` and `folderTypes` at your own names.
 
 ### Pages powered by a document (`hst:relativecontentpath`)
 
@@ -113,8 +157,8 @@ The demo's `myproject:xpagedocument`, `new-xpage-document` and `new-xpage-folder
 
 ### Customization hooks
 
-The script has a marked `CUSTOMIZATION HOOKS` block. Client forks only change those methods, so upstream fixes can be
-merged with a plain diff:
+The script has a marked `CUSTOMIZATION HOOKS` block. Project-specific forks need only to change those methods. 
+Upstream fixes can be merged with a plain diff:
 
 * `populateDocumentVariant(variant, item, ctx)` – write document fields before save/publish
 * `keepContainerItem(containerItem, item)` – return `false` to leave an item out (e.g. because a field replaces it)
@@ -123,7 +167,7 @@ merged with a plain diff:
 
 ## How pages are matched to layouts
 
-For each landing page, every layout is scored by mapping each landing container to a layout container by
+For each landing (prototype) page, every layout is scored by mapping each landing container to a layout container by
 **`hippo:identifier`**, then **relative path** (`main/content/left`), then a **unique container name**. A layout wins when
 all containers map without two landing containers landing in the same layout container; ties are broken by equal
 static structure, then equal `hst:referencecomponent`, then name (deterministic).
@@ -134,61 +178,6 @@ Nothing is ever dropped silently: a page with unmatched or colliding containers 
 
 Container references (`hst:containercomponentreference`) are resolved to `hst:workspace/hst:containers`. Pages are
 resolved in the workspace, the configuration and the `hst:inheritsfrom` configurations.
-
----
-
-## Running the updater
-
-*Setup → System → Updater editor*, select **XPath query** and query **only** the configurations node of the runtime
-HST root:
-
-```
-/jcr:root/hst:myproject/hst:configurations
-```
-
-The runtime HST root is the site's `hstRoot` (`hcm-site.yaml`, `hst.configuration.rootPath`), not the `/hst:hst`
-prefix used inside HCM YAML files. Do not use "Repository path": that makes the updater visit every HST node.
-Log target `REPOSITORY` keeps the output in the updater history; set log level to `INFO` (the script has its own levels).
-
-### Parameters
-
-| Parameter | Default | Meaning |
-|---|---|---|
-| `hstConfigurations` | – (required) | comma separated configuration names (`hstConfiguration` also accepted) |
-| `steps` | `analyze` | `analyze`, `templates`, `convert`, `sitemap`, `cleanup` (comma separated) |
-| `defaultXpageDocType` | – (required for convert) | e.g. `myproject:xpagedocument` |
-| `primaryDocumentMode` | `connector` | `connector` or `mixin`, see above |
-| `xPageFolder` | `xpages` | folder below the content root that receives the documents |
-| `documentTemplateCategory` | `new-xpage-document` | template query used by the folder workflow to add documents |
-| `folderTypes` | `["new-xpage-document","new-xpage-folder"]` | added to `hippostd:foldertype` of the XPage folders |
-| `contentRootPath` | from `hst:site` | content root override when the site cannot be resolved |
-| `templateMapping` | `{}` | `{"<sitemap path or page name>": "<layout>"}` explicit overrides |
-| `fallbackXPageTemplate` | – | layout used when no layout matches |
-| `unmatchedContainers` | `skip-page` | `skip-page` or `merge-into-primary` |
-| `existingDocument` | `skip` | `skip`, `reapply` (re-copy the layout into the existing XPage) or `recreate` (delete + create) |
-| `publish` | `true` | publish converted documents (`publishPages` also accepted) |
-| `publishPendingChanges` | `false` | also publish existing documents that had unpublished editor changes |
-| `titleProperty` | – | document property to fill with the sitemap item's `hst:pagetitle` (e.g. `acm:title`) |
-| `setDisplayName` | `true` | use `hst:pagetitle` as the document display name |
-| `parseInheritedHstConfiguration` | `false` | also convert prototype pages of inherited configurations |
-| `overwriteXPageTemplates` | `false` | let `templates` replace existing layouts |
-| `generateMissingTemplates` | `false` | let `templates` derive layouts from pages that nothing else can host |
-| `discardPreviewConfiguration` | `true` | delete `<config>-preview` before writing; `false` aborts instead |
-| `cleanupUnpublished` | `false` | let `cleanup` repoint/remove items whose XPage is not published yet |
-| `sitemapStrategy` | `wildcard` | `wildcard` (remove converted items, URLs via the `_default_` chain) or `explicit` (keep and repoint them) |
-| `includePaths` | – | only handle these sitemap paths (and below) |
-| `limit` | `0` | convert at most N items per run |
-| `logLevel` | `item` | `summary`, `item` or `trace` |
-| `progressEvery` | `25` | progress / ETA line every N items |
-| `reportToRepository` | `false` | also store each step report under `/p2x-reports` |
-
-### Mapping earlier customer forks to parameters
-
-| Fork | Customization | Now |
-|---|---|---|
-| ACM | `new-ExperiencePage-document` category, `acm:title` from page title, absolute content paths | `documentTemplateCategory`, `folderTypes`, `titleProperty`; absolute paths are handled |
-| TPCI | remap containers onto existing layouts, `hst:xtype` / `hst:label` differences | identifier/path/name mapping, `templateMapping` |
-| CIBC | everything into `simple-content`, shared pages, partial failures | `fallbackXPageTemplate` (+ `merge-into-primary`), reference-counted cleanup, per-item save/refresh |
 
 ---
 
@@ -210,8 +199,9 @@ The updater run cannot be paused or debugged, so the log is designed to explain 
 ## Development
 
 When the groovy script changes, update the `hipposys:script` in `landing2xpageconversion.yaml` and in the demo's
-updater registry entry as well. Start the demo with auto export disabled so test runs do not end up in the demo's YAML:
+updater registry entry as well. 
 
+Start the demo with auto export disabled so test runs do not end up in the demo's YAML:
 ```
 cd demo && mvn clean verify && mvn -P cargo.run -Drepo.autoexport.allowed=false
 ```
