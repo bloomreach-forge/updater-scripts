@@ -11,11 +11,12 @@
  *
  *   analyze    (default, read-only)  report what would happen for every workspace sitemap item
  *   templates  (writes HST config)   convert hst:prototypepages into hst:xpages layouts (+ optional generated layouts)
- *   sitemap    (writes HST config)   add a hidden "<xPageFolder>/**" sitemap subtree so NEW editor-created XPages resolve
  *   convert    (writes content)      create an XPage document per landing page and copy the container items into it
- *   cleanup    (writes HST config)   repoint converted sitemap items to their XPage document and remove orphaned pages
+ *   sitemap    (writes HST config)   sitemapStrategy=wildcard: add root _default_ / _index_ wildcards that map URL slugs onto
+ *                                    the XPage folder, so XPages need no sitemap item of their own
+ *   cleanup    (writes HST config)   remove (wildcard) or repoint (explicit) converted sitemap items, delete orphaned pages
  *
- * Recommended order: analyze -> templates -> analyze -> convert -> verify in Experience manager -> cleanup.
+ * Recommended order: analyze -> templates -> analyze -> convert -> verify in Experience manager -> sitemap -> cleanup.
  * Nothing is deleted before "cleanup", and every step can be re-run safely.
  *
  * The updater "dry run" checkbox is honored: a dry run only ever executes "analyze".
@@ -51,8 +52,12 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
     // ------------------------------------------------------------------------------------------------------------
 
     static final String VERSION = "2.0.0"
-    static final List<String> STEP_ORDER = ["analyze", "templates", "sitemap", "convert", "cleanup"]
-    static final List<String> MUTATING_STEPS = ["templates", "sitemap", "convert", "cleanup"]
+    static final List<String> STEP_ORDER = ["analyze", "templates", "convert", "sitemap", "cleanup"]
+    static final List<String> MUTATING_STEPS = ["templates", "convert", "sitemap", "cleanup"]
+    /** sitemap item properties that only matter for the old landing page; anything else makes an item worth keeping */
+    static final List<String> DISPOSABLE_SITEMAP_PROPERTIES = ["jcr:primaryType", "jcr:mixinTypes", "jcr:uuid",
+            "hst:componentconfigurationid", "hst:relativecontentpath", "hst:pagetitle", "hst:lastmodified", "hst:lastmodifiedby",
+            "hst:lockedby", "hst:lockedon", "hst:componentconfigurationmappingnames", "hst:componentconfigurationmappingvalues"]
     static final List<String> WILDCARD_MARKERS = ["_default_", "_any_", "_index_", '${']
     /** properties never copied from landing pages / prototypes into layouts or documents */
     static final List<String> NON_COPY_PROPERTIES = ["hst:lockedby", "hst:lockedon", "hst:lastmodified", "hst:lastmodifiedby"]
@@ -85,6 +90,7 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
     boolean generateMissingTemplates
     boolean discardPreviewConfiguration
     boolean cleanupUnpublished
+    String sitemapStrategy
     List<String> includePaths
     int limit
     int logLevel
@@ -139,8 +145,9 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
         parseInheritedHstConfiguration = boolParam("parseInheritedHstConfiguration", false)
         overwriteXPageTemplates = boolParam("overwriteXPageTemplates", false)
         generateMissingTemplates = boolParam("generateMissingTemplates", false)
-        discardPreviewConfiguration = boolParam("discardPreviewConfiguration", false)
+        discardPreviewConfiguration = boolParam("discardPreviewConfiguration", true)
         cleanupUnpublished = boolParam("cleanupUnpublished", false)
+        sitemapStrategy = strParam("sitemapStrategy", "wildcard")
         includePaths = listParam("includePaths", []).collect { StringUtils.strip(it, "/") }
         limit = intParam("limit", 0)
         progressEvery = intParam("progressEvery", 25)
@@ -152,6 +159,7 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
         if (!["connector", "mixin"].contains(primaryDocumentMode)) problems << "primaryDocumentMode must be connector|mixin"
         if (!["skip-page", "merge-into-primary"].contains(unmatchedContainers)) problems << "unmatchedContainers must be skip-page|merge-into-primary"
         if (!["skip", "reapply", "recreate"].contains(existingDocument)) problems << "existingDocument must be skip|reapply|recreate"
+        if (!["wildcard", "explicit"].contains(sitemapStrategy)) problems << "sitemapStrategy must be wildcard|explicit"
         if (steps.contains("convert") && StringUtils.isBlank(docType)) problems << "defaultXpageDocType is required for the convert step"
         // run steps in their canonical order, whatever order they were given in
         steps = STEP_ORDER.findAll { steps.contains(it) }
@@ -167,6 +175,10 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
         if (!problems.isEmpty()) {
             problems.each { log.error("[P2X] invalid parameter: " + it) }
             throw new IllegalArgumentException("[P2X] invalid parameters: " + problems.join("; "))
+        }
+        if (primaryDocumentMode == "mixin" && steps.contains("convert") && !steps.contains("cleanup")) {
+            warn("primaryDocumentMode=mixin without 'cleanup' in the same run: run cleanup with the same primaryDocumentMode and includePaths " +
+                    "before any connector-mode run, otherwise those items are converted a second time")
         }
         if (steps.any { MUTATING_STEPS.contains(it) }) {
             info("**** WRITES ENABLED for steps " + steps.findAll { MUTATING_STEPS.contains(it) } + " ****")
@@ -337,6 +349,7 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
         Match match
         String targetRelPath      // relative to the content root
         String targetState        // new | existing-xpage | conflict:<why>
+        String keepReason         // wildcard strategy: why this item stays explicit (null = removable)
     }
 
     static class Match {
@@ -617,13 +630,6 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
             item.detail = "page '" + item.ccid + "' not found in workspace, configuration" + (ctx.inherited ? " or inherited " + ctx.inherited.collect { it.getName() } : "")
             return
         }
-        if (item.relativeContentPath != null && isXPageHandle(contentNode(ctx, item.relativeContentPath))) {
-            // the document behind this page already is an XPage (mixin mode run, or converted by hand): converting it
-            // again in connector mode would create a second document for the same URL
-            item.action = "ALREADY_CONVERTED"; item.reason = "ALREADY_CONVERTED"
-            item.detail = "primary document " + item.relativeContentPath + " already is an XPage"
-            return
-        }
         if (!item.page.problems.isEmpty()) {
             item.reason = "SKIP_PAGE_PROBLEM"; item.detail = item.page.problems.join("; ")
             return
@@ -830,9 +836,9 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
         List<Item> items = ctx.items
         logTotal = items.size()
         List<String> table = []
+        items.each { planItem(ctx, it) }
         items.eachWithIndex { Item item, int i ->
             logIndex = i + 1; logItem = item.relPath
-            planItem(ctx, item)
             logItemPlan(ctx, item)
             outcome(item.path, item.action == "CONVERT" ? "WOULD_CONVERT" : (item.action == "SKIP" ? "SKIPPED" : item.action), item.reason, item.detail, planRecord(item))
             table << String.format("%-45s | %-40s | %-24s | %-60s | %s", StringUtils.abbreviate(item.relPath, 45),
@@ -869,6 +875,11 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
                 warn("  CONTENT BEAN: this page is powered by document '" + item.relativeContentPath + "'. After conversion the content bean is the " +
                         "XPage document, so these components (no explicit 'document' parameter) may lose their content: " + item.page.contentBeanComponents)
             }
+            if (item.relativeContentPath != null && primaryDocumentMode == "connector" && item.ccid != null &&
+                    isXPageHandle(contentNode(ctx, item.relativeContentPath))) {
+                warn("  primary document " + item.relativeContentPath + " already is an XPage (mixin conversion?). This item still has its page, " +
+                        "so connector mode gives it its own document. If this item WAS the mixin conversion, run cleanup in that mixin batch first.")
+            }
             if (item.relativeContentPath != null && contentNode(ctx, item.relativeContentPath) == null) {
                 warn("  relative content path " + item.relativeContentPath + " does not exist under " + ctx.contentRoot?.getPath())
             }
@@ -881,6 +892,20 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
         }
         if (item.targetRelPath != null) {
             itemLog("  target    : " + item.targetRelPath + " (" + item.targetState + ")")
+            if (item.action == "CONVERT") {
+                if (sitemapStrategy == "explicit") {
+                    itemLog("  sitemap   : cleanup repoints this item to " + item.targetRelPath)
+                } else {
+                    String keep = keepReason(item, ctx)
+                    String mismatch = wildcardMismatch(ctx, item, item.targetRelPath)
+                    if (mismatch != null && mismatch.contains("run the sitemap step")) mismatch = null   // the chain is added later
+                    if (keep == null && mismatch == null) {
+                        itemLog("  sitemap   : cleanup removes this item, the wildcard chain serves /" + item.relPath)
+                    } else {
+                        warn("  sitemap   : stays an explicit item (" + (keep ?: mismatch) + "), cleanup repoints it to " + item.targetRelPath)
+                    }
+                }
+            }
         }
         itemLog("  result    : " + item.reason + (item.detail ? " - " + item.detail : ""))
     }
@@ -1030,40 +1055,194 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
     // ============================================================================================================
 
     boolean stepSitemap(Ctx ctx) {
-        Node sitemap
-        if (ctx.configNode.hasNode("hst:sitemap")) {
-            sitemap = ctx.configNode.getNode("hst:sitemap")
-        } else if (ctx.configNode.hasNode("hst:workspace/hst:sitemap")) {
-            // creating an own hst:sitemap would hide the inherited one, so use the (merged) workspace sitemap instead
-            sitemap = ctx.configNode.getNode("hst:workspace/hst:sitemap")
-            info("configuration has no own hst:sitemap (inherited); adding the xpage subtree to the workspace sitemap " + sitemap.getPath())
-        } else {
-            outcome(null, "SKIPPED", "SKIP_NO_SITEMAP", "no hst:sitemap or hst:workspace/hst:sitemap to add to")
+        if (sitemapStrategy != "wildcard") {
+            outcome(null, "SKIPPED", "SKIP_EXPLICIT_STRATEGY", "sitemapStrategy=explicit: converted items keep their own sitemap item, no wildcards needed")
             return false
         }
-        String itemName = NodeNameCodec.encode(xPageFolder, true)
-        if (sitemap.hasNode(itemName)) {
-            outcome(sitemap.getPath() + "/" + itemName, "SKIPPED", "SKIP_SITEMAP_EXISTS", "sitemap item exists, not touching it:\n" + dump(sitemap.getNode(itemName), 4))
+        Node sitemap = wildcardSitemapRoot(ctx)
+        if (sitemap == null) {
+            outcome(null, "SKIPPED", "SKIP_NO_SITEMAP", "no hst:sitemap or hst:workspace/hst:sitemap to add the wildcards to")
             return false
         }
-        int depth = 1
-        ctx.items.each { planItem(ctx, it); if (it.targetRelPath != null) depth = Math.max(depth, it.targetRelPath.split("/").length - 1) }
-        depth = Math.max(depth, 3)
-        Node root = sitemap.addNode(itemName, "hst:sitemapitem")
-        root.setProperty("hst:relativecontentpath", xPageFolder)
-        root.setProperty("hst:hiddeninchannelmanager", true)
-        Node current = root
+        int depth = wildcardDepth(ctx)
+        info("adding the XPage wildcard chain to " + sitemap.getPath() + " (depth " + depth + "): /_default_[/_default_...] -> " +
+                xPageFolder + '/${1}[/${2}...], with _index_ -> ${parent}/index on every level')
+        boolean changed = false
+        Node current = sitemap
         for (int level = 1; level <= depth; level++) {
-            Node index = current.addNode("_index_", "hst:sitemapitem")
-            index.setProperty("hst:relativecontentpath", '${parent}/index')
-            Node wildcard = current.addNode("_default_", "hst:sitemapitem")
-            wildcard.setProperty("hst:relativecontentpath", '${parent}/${' + level + '}')
+            String contentPath = level == 1 ? xPageFolder + '/${1}' : '${parent}/${' + level + '}'
+            Node wildcard
+            if (current.hasNode("_default_")) {
+                wildcard = current.getNode("_default_")
+                String existing = stringProp(wildcard, "hst:relativecontentpath")
+                if (existing == null) {
+                    // keep hst:componentconfigurationid: the HST renders it when no document resolves (fallback, e.g. 404)
+                    itemLog("existing wildcard " + wildcard.getPath() + " before change:\n" + dump(wildcard, 0))
+                    wildcard.setProperty("hst:relativecontentpath", contentPath)
+                    changed = true
+                    outcome(wildcard.getPath(), "UPDATED", "SITEMAP_WILDCARD_EXTENDED", "added hst:relativecontentpath=" + contentPath +
+                            ", kept hst:componentconfigurationid=" + stringProp(wildcard, "hst:componentconfigurationid") + " as fallback")
+                } else if (existing != contentPath) {
+                    outcome(wildcard.getPath(), "ABORTED", "ABORT_SITEMAP_WILDCARD_CONFLICT", "existing wildcard maps to '" + existing +
+                            "', not '" + contentPath + "'. Resolve by hand or use sitemapStrategy=explicit")
+                    return changed
+                } else {
+                    outcome(wildcard.getPath(), "SKIPPED", "SKIP_SITEMAP_WILDCARD_EXISTS", "already maps to " + contentPath)
+                }
+            } else {
+                wildcard = current.addNode("_default_", "hst:sitemapitem")
+                wildcard.setProperty("hst:relativecontentpath", contentPath)
+                String fallback = fallbackPageFor(current)
+                if (fallback != null) wildcard.setProperty("hst:componentconfigurationid", fallback)
+                changed = true
+                outcome(wildcard.getPath(), "UPDATED", "SITEMAP_WILDCARD_CREATED", "hst:relativecontentpath=" + contentPath +
+                        (fallback != null ? ", fallback page " + fallback : ""))
+            }
+            if (!wildcard.hasNode("_index_")) {
+                Node index = wildcard.addNode("_index_", "hst:sitemapitem")
+                index.setProperty("hst:relativecontentpath", '${parent}/index')
+                changed = true
+                outcome(index.getPath(), "UPDATED", "SITEMAP_INDEX_CREATED", 'hst:relativecontentpath=${parent}/index')
+            } else if (stringProp(wildcard.getNode("_index_"), "hst:relativecontentpath") != '${parent}/index') {
+                warn("existing " + wildcard.getNode("_index_").getPath() + " maps to " + stringProp(wildcard.getNode("_index_"), "hst:relativecontentpath") +
+                        ": folder URLs will not resolve to their 'index' XPage")
+            }
             current = wildcard
         }
-        session.save()
-        outcome(root.getPath(), "UPDATED", "SITEMAP_CREATED", "hidden sitemap subtree with depth " + depth + " for documents under " + xPageFolder)
-        trace("sitemap subtree:\n" + dump(root, depth + 2))
-        return true
+        if (changed) session.save()
+        trace("wildcard chain:\n" + dump(sitemap.getNode("_default_"), depth * 2 + 1))
+        return changed
+    }
+
+    /** wildcards belong in the developer-managed hst:sitemap; only fall back to the workspace when there is none */
+    Node wildcardSitemapRoot(Ctx ctx) {
+        if (ctx.configNode.hasNode("hst:sitemap")) return ctx.configNode.getNode("hst:sitemap")
+        if (ctx.configNode.hasNode("hst:workspace/hst:sitemap")) {
+            info("configuration has no own hst:sitemap (inherited); using the workspace sitemap for the wildcards")
+            return ctx.configNode.getNode("hst:workspace/hst:sitemap")
+        }
+        return null
+    }
+
+    /** number of _default_ levels needed: the deepest converted URL (documents named index map to their folder URL) */
+    int wildcardDepth(Ctx ctx) {
+        // all workspace items count (not only includePaths / limit), so a first batch already builds the full chain;
+        // the chain is extended on later runs when deeper items appear
+        int depth = 1
+        String prefix = xPageFolder + "/"
+        ctx.items.each { item ->
+            if (item.wildcard) return
+            if (item.ccid != null && item.page != null) {
+                depth = Math.max(depth, item.relPath.split("/").length)
+            } else if (item.relativeContentPath != null && item.relativeContentPath.startsWith(prefix)) {
+                depth = Math.max(depth, urlSegments(item.relativeContentPath).size())
+            }
+        }
+        return depth
+    }
+
+    /** a new wildcard level inherits the fallback page of the closest wildcard above it (or the root _any_) */
+    String fallbackPageFor(Node parent) {
+        Node n = parent
+        while (n.isNodeType("hst:sitemapitem")) {
+            String ccid = stringProp(n, "hst:componentconfigurationid")
+            if (ccid != null) return ccid
+            n = n.getParent()
+        }
+        // reached hst:sitemap: use the root catch-all (usually the 404 page)
+        return n.hasNode("_any_") ? stringProp(n.getNode("_any_"), "hst:componentconfigurationid") : null
+    }
+
+    /** URL segments that address a document under the XPage folder: xpages/a/b/index -> [a, b] */
+    static List<String> urlSegments(String targetRelPath) {
+        List<String> segments = new ArrayList<>(Arrays.asList(targetRelPath.split("/")))
+        segments.remove(0)
+        if (!segments.isEmpty() && segments.last() == "index") segments.remove(segments.size() - 1)
+        return segments
+    }
+
+    /**
+     * Would the wildcard chain serve this item's URL with the given document? Only when the item's URL segments are
+     * exactly the document's folder path, the chain is deep enough, and no explicit ancestor's wildcard wins the match.
+     * Returns null when it would, otherwise the reason it would not.
+     */
+    String wildcardMismatch(Ctx ctx, Item item, String targetRelPath) {
+        if (!targetRelPath.startsWith(xPageFolder + "/")) return "document " + targetRelPath + " is outside the XPage folder"
+        List<String> segments = urlSegments(targetRelPath)
+        List<String> url = item.relPath.split("/") as List<String>
+        if (segments != url.collect { NodeNameCodec.encode(it, true) }) return "URL /" + item.relPath + " does not equal the document path " + targetRelPath
+        // an explicit ancestor with wildcard children (e.g. /news + news/_any_) wins over the root chain
+        for (int i = 1; i < url.size(); i++) {
+            String prefix = url.subList(0, i).join("/")
+            for (Node sm : sitemapRoots(ctx)) {
+                if (!safeHasNode(sm, prefix)) continue
+                Node ancestor = sm.getNode(prefix)
+                for (NodeIterator it = ancestor.getNodes(); it.hasNext();) {
+                    String child = it.nextNode().getName()
+                    if (child.startsWith("_default_") || child.startsWith("_any_")) {
+                        return "explicit ancestor " + ancestor.getPath() + " has wildcard child " + child + " that would match /" + item.relPath + " first"
+                    }
+                }
+            }
+        }
+        Node sitemap = wildcardSitemapRoot(ctx)
+        Node current = sitemap
+        for (int i = 0; i < url.size(); i++) {
+            if (current == null || !current.hasNode("_default_")) return "no wildcard chain at depth " + (i + 1) + " (run the sitemap step)"
+            current = current.getNode("_default_")
+            String expected = i == 0 ? xPageFolder + '/${1}' : '${parent}/${' + (i + 1) + '}'
+            if (stringProp(current, "hst:relativecontentpath") != expected) return current.getPath() + " does not map to " + expected
+        }
+        if (targetRelPath.endsWith("/index") && (current == null || !current.hasNode("_index_"))) return "no _index_ item for folder URL /" + item.relPath
+        return null
+    }
+
+    /** every sitemap that is merged into this channel's sitemap */
+    List<Node> sitemapRoots(Ctx ctx) {
+        List<Node> roots = []
+        for (Node cfg : [ctx.configNode] + ctx.inherited) {
+            for (String rel : ["hst:sitemap", "hst:workspace/hst:sitemap"]) {
+                if (cfg.hasNode(rel)) roots << cfg.getNode(rel)
+            }
+        }
+        return roots
+    }
+
+    /** properties / children that make a sitemap item more than a pointer to a page */
+    String keepReason(Item item) {
+        return keepReason(item, null)
+    }
+
+    /**
+     * With a ctx (analyze), children that cleanup will remove first (it works deepest first) do not count; without
+     * one (cleanup) the current repository state decides.
+     */
+    String keepReason(Item item, Ctx planned) {
+        List<String> significant = []
+        for (PropertyIterator it = item.node.getProperties(); it.hasNext();) {
+            String name = it.nextProperty().getName()
+            if (!DISPOSABLE_SITEMAP_PROPERTIES.contains(name)) significant << name
+        }
+        if (!significant.isEmpty()) return "has properties " + significant
+        if (planned != null) {
+            Item staying = item.children.find { !removableByCleanup(planned, it) }
+            return staying != null ? "has child sitemap item " + staying.name + " that stays" : null
+        }
+        for (NodeIterator it = item.node.getNodes(); it.hasNext();) {
+            Node child = it.nextNode()
+            if (child.isNodeType("hst:sitemapitem")) return "has child sitemap items (e.g. " + child.getName() + ")"
+        }
+        return null
+    }
+
+    /** analyze view of cleanup: is this item converted now and removable once its children are handled? */
+    boolean removableByCleanup(Ctx ctx, Item item) {
+        if (item.action != "CONVERT" && item.action != "ALREADY_CONVERTED") return false
+        String target = item.targetRelPath ?: item.relativeContentPath
+        if (target == null) return false
+        String mismatch = wildcardMismatch(ctx, item, target)
+        if (mismatch != null && !mismatch.contains("run the sitemap step")) return false
+        return keepReason(item, ctx) == null
     }
 
     // ============================================================================================================
@@ -1323,22 +1502,50 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
         if (ctx.contentRoot == null) {
             throw new IllegalStateException("content root unresolved: " + ctx.contentRootProblem)
         }
+        if (sitemapStrategy == "wildcard") {
+            Node sitemap = wildcardSitemapRoot(ctx)
+            String expected = xPageFolder + '/${1}'
+            if (sitemap == null || !sitemap.hasNode("_default_") || stringProp(sitemap.getNode("_default_"), "hst:relativecontentpath") != expected) {
+                outcome(null, "ABORTED", "ABORT_NO_WILDCARD_CHAIN", "sitemapStrategy=wildcard but there is no root _default_ mapping to " + expected +
+                        ": run the 'sitemap' step first (or use sitemapStrategy=explicit)")
+                return false
+            }
+        }
         List<Item> candidates = []
         for (Item item : ctx.items) {
-            if (item.ccid == null || item.page == null || item.wildcard) continue
+            if (item.wildcard) continue
             if (!includePaths.isEmpty() && !includePaths.any { item.relPath == it || item.relPath.startsWith(it + "/") }) continue
-            candidates << item
+            boolean pageItem = item.ccid != null && item.page != null
+            // already repointed by an explicit run: still removable when the wildcard chain now serves it
+            boolean repointed = item.ccid == null && sitemapStrategy == "wildcard" && item.relativeContentPath != null &&
+                    item.relativeContentPath.startsWith(xPageFolder + "/")
+            if (pageItem || repointed) candidates << item
         }
+        // deepest first: a parent becomes removable once its converted children are gone
+        candidates.sort { Item a, Item b -> b.depth <=> a.depth ?: a.relPath <=> b.relPath }
         logTotal = candidates.size()
         Set<Page> touchedPages = new LinkedHashSet<>()
         boolean changed = false
         candidates.eachWithIndex { Item item, int i ->
             logIndex = i + 1; logItem = item.relPath
             try {
-                // the target is computed exactly like convert did (descendants decide on <path>/index); a primary
-                // document that already is an XPage (mixin mode) is its own target
-                String relPath = item.relativeContentPath != null && isXPageHandle(contentNode(ctx, item.relativeContentPath)) ?
-                        item.relativeContentPath : targetRelPath(ctx, item)
+                // the target is computed exactly like convert did (descendants decide on <path>/index); run cleanup
+                // with the same primaryDocumentMode (and includePaths) as the convert it follows
+                String relPath = item.ccid == null ? item.relativeContentPath : targetRelPath(ctx, item)
+                if (item.ccid == null) {
+                    String keep = keepReason(item)
+                    String mismatch = wildcardMismatch(ctx, item, relPath)
+                    if (keep != null || mismatch != null || !isXPageHandle(contentNode(ctx, relPath))) {
+                        outcome(item.path, "SKIPPED", "SKIP_KEPT_EXPLICIT", "already points to " + relPath + ", stays explicit: " + (keep ?: mismatch ?: "no XPage document"))
+                        return
+                    }
+                    itemLog("removing sitemap item (served by the wildcard chain):\n" + dump(item.node, 0))
+                    item.node.remove()
+                    session.save()
+                    changed = true
+                    outcome(item.path, "UPDATED", "SITEMAP_ITEM_REMOVED", "URL /" + item.relPath + " is now served by the wildcard chain -> " + relPath)
+                    return
+                }
                 Node handle = contentNode(ctx, relPath)
                 if (handle == null || !isXPageHandle(handle)) {
                     outcome(item.path, "SKIPPED", "SKIP_NOT_CONVERTED", "no XPage document at " + relPath + " (run convert first)")
@@ -1352,6 +1559,20 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
                     return
                 }
                 itemLog("cleanup sitemap item before change:\n" + dump(item.node, 0))
+                if (sitemapStrategy == "wildcard") {
+                    String keep = keepReason(item)
+                    String mismatch = wildcardMismatch(ctx, item, relPath)
+                    if (keep == null && mismatch == null) {
+                        item.node.remove()
+                        session.save()
+                        touchedPages << item.page
+                        item.ccid = null
+                        changed = true
+                        outcome(item.path, "UPDATED", "SITEMAP_ITEM_REMOVED", "URL /" + item.relPath + " is now served by the wildcard chain -> " + relPath)
+                        return
+                    }
+                    itemLog("  keeping an explicit sitemap item: " + (keep ?: mismatch))
+                }
                 if (item.node.hasProperty("hst:componentconfigurationid")) item.node.getProperty("hst:componentconfigurationid").remove()
                 ["hst:componentconfigurationmappingnames", "hst:componentconfigurationmappingvalues"].each {
                     if (item.node.hasProperty(it)) {
@@ -1364,7 +1585,8 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
                 touchedPages << item.page
                 item.ccid = null
                 changed = true
-                outcome(item.path, "UPDATED", "SITEMAP_ITEM_REPOINTED", "hst:relativecontentpath=" + relPath + " (was page " + item.page.id + ")")
+                outcome(item.path, "UPDATED", "SITEMAP_ITEM_REPOINTED", "hst:relativecontentpath=" + relPath + " (was page " + item.page.id + ")" +
+                        (sitemapStrategy == "wildcard" ? "; kept explicit: " + (keepReason(item) ?: wildcardMismatch(ctx, item, relPath)) : ""))
             } catch (Exception e) {
                 error("cleanup failed for " + item.path, e)
                 safeRefresh()
@@ -1787,6 +2009,7 @@ class LandingPageToXPageConverter extends BaseNodeUpdateVisitor {
         m.put("generateMissingTemplates", generateMissingTemplates)
         m.put("discardPreviewConfiguration", discardPreviewConfiguration)
         m.put("cleanupUnpublished", cleanupUnpublished)
+        m.put("sitemapStrategy", sitemapStrategy)
         m.put("includePaths", includePaths)
         m.put("limit", limit)
         m.put("logLevel", ["summary", "item", "trace"][logLevel])

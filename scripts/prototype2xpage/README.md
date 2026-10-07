@@ -9,7 +9,7 @@ container items as they are, so editors keep the experience they are used to.
 | `landing2xpageconversion.groovy` | the script |
 | `landing2xpageconversion.yaml` | the same script as an updater registry entry |
 
-The script is a starting point: client projects differ, so copy it into the client project and adapt it there.
+The script is a starting point, real projects differ, so copy it into your project and adapt it from there.
 The demo project in `../../demo` (brXM 17.3.0) covers the most common case: it has the updater registered, a fieldless
 `myproject:xpagedocument` document type, and test fixtures under the `/p2x/**` sitemap items.
 
@@ -17,38 +17,68 @@ The demo project in `../../demo` (brXM 17.3.0) covers the most common case: it h
 
 ## Why steps
 
-Customer HST structures differ a lot: inherited configurations, container references, pages shared by many sitemap
+HST structures differ a lot in real life projects: inherited configurations, container references, pages shared by many sitemap
 items, absolute content paths, name collisions in the content tree, preview configurations with unpublished changes...
-Running everything in one go made every failure a half converted channel. The conversion is therefore split into
-separate steps that you run one at a time and verify in between:
+Running everything in one go can result in a half converted channel. The conversion is therefore split into
+separate steps that you run one at a time and verify in between.
 
 | Step | Writes | What it does |
 |---|---|---|
 | `analyze` *(default)* | nothing | Builds the model and logs, per sitemap item: the resolved page, the chosen layout and how every container maps, the target document and whether it collides, plus warnings (components that rely on the content bean, missing documents, preview configuration, missing doc type / template query). |
 | `templates` | HST config | Copies `hst:prototypepages` into `hst:xpages` layouts. Existing layouts are never overwritten unless `overwriteXPageTemplates=true`. With `generateMissingTemplates=true` it also creates a layout for every page structure that no layout can host. |
 | `convert` | content | Creates one XPage document per convertible sitemap item under `<content root>/<xPageFolder>/<sitemap path>` and copies the landing page's container items into it. **Deletes nothing.** Existing XPage documents are skipped (`existingDocument`). |
-| `sitemap` | HST config | Adds a hidden `<xPageFolder>/**` sitemap subtree so XPages that editors create *later* get a URL. Existing items are never modified. Optional. |
-| `cleanup` | HST config | For each sitemap item whose XPage document is published: removes `hst:componentconfigurationid` and points `hst:relativecontentpath` at the document, so the URL stays exactly the same. Then deletes the workspace pages that no sitemap item uses anymore (a full dump of each deleted page is logged first). Inherited / non-workspace pages are never deleted. |
+| `sitemap` | HST config | `sitemapStrategy: wildcard` *(default)*: adds a root `_default_` chain to `hst:sitemap` that maps URL slugs onto the XPage folder (see below). Existing wildcards only get a `hst:relativecontentpath` added; a wildcard that already maps elsewhere aborts the step. Does nothing with `explicit`. |
+| `cleanup` | HST config | For each sitemap item whose XPage document is published: **removes** the item when the wildcard chain serves its URL with the same document, otherwise removes `hst:componentconfigurationid` and points `hst:relativecontentpath` at the document. Either way the URL stays exactly the same. Then deletes the workspace pages that no sitemap item uses anymore (a full dump of each deleted item and page is logged first). Inherited / non-workspace pages are never deleted. |
 
 Recommended sequence:
 
 1. `analyze` – read the report, fix what it flags (template mapping, doc type, preview configuration...).
-2. `templates` – usually locally; export the resulting `hst:xpages` to the project's HCM config and deploy it.
-3. `analyze` again – every item should now say `CONVERT` or have a skip reason you accept.
+2. `templates` – run locally; export the resulting `hst:xpages` to the project's HCM config and deploy it.
+3. `analyze` - again. every item should now say `CONVERT` or have a skip reason you accept.
 4. `convert` – then check the new documents in the Experience manager. The site still serves the old pages.
-5. `cleanup` – switches the URLs to the XPage documents.
-6. Optionally `sitemap`.
+5. `sitemap` – adds the wildcard chain (the explicit landing page items still win, so nothing changes yet).
+6. `cleanup` – switches the URLs to the XPage documents.
 
 Every step can be re-run: already converted items are reported as `ALREADY_CONVERTED` / `SKIP_EXISTING_DOCUMENT`.
-Several steps can be combined (`"steps": "convert,cleanup"`); they always execute in the order above.
+Several steps can be combined (`"steps": "convert,sitemap,cleanup"`); they always execute in the order above.
 
 Use `includePaths` and `limit` to convert a large channel in batches.
 
 ### Mutating steps refuse to run when...
 
-* a `<config>-preview` configuration exists (it may hold unpublished channel changes). Publish/discard the changes in
-  the Experience manager first, or set `discardPreviewConfiguration=true` to delete it.
+* a `<config>-preview` configuration exists and `discardPreviewConfiguration=false`. By default the preview
+  configuration is deleted (with a warning and a dump in the log) before the step runs, so unpublished channel changes
+  are lost – publish or discard them in the Experience manager first, or set `discardPreviewConfiguration=false` to
+  make the script stop instead.
 * the updater's **Dry run** checkbox is ticked: a dry run only ever executes `analyze`.
+
+### Sitemap strategy
+
+`sitemapStrategy: "wildcard"` *(default)* – the URL of an XPage is its path in the XPage folder:
+
+```
+hst:sitemap
+  _default_          hst:relativecontentpath = xpages/${1}        (+ hst:componentconfigurationid of the root _any_, e.g. 404)
+    _index_          hst:relativecontentpath = ${parent}/index
+    _default_        hst:relativecontentpath = ${parent}/${2}
+      _index_        ...                                           one level per URL depth that was converted
+```
+
+`/foo/bar` resolves to `xpages/foo/bar`, or to `xpages/foo/bar/index` when `bar` has child pages. When the document does
+not exist or is unpublished, the wildcard's `hst:componentconfigurationid` is used as fallback, so the 404 page renders.
+Converted sitemap items are therefore removed: deleting or unpublishing an XPage later needs no sitemap clean up, and new
+XPages that editors create in the folder get a URL automatically. Explicit sitemap items always win over wildcards, so
+pages that were not converted keep working.
+
+A converted item is kept (and repointed instead) when:
+* it has properties of its own besides the page reference and page title (`hst:refId`, `hst:roles`, `hst:scheme`,
+  `hst:namedpipeline`, `hst:parameternames`, ...), or child items that stay;
+* its document is outside the XPage folder (`primaryDocumentMode: "mixin"`);
+* an explicit ancestor has its own wildcard children (e.g. `/news/_any_`) that would match the URL first.
+
+`analyze` shows per item which of the two will happen (`sitemap :` line).
+
+`sitemapStrategy: "explicit"` – every converted item stays, pointing at its document (the old behaviour).
 
 ### Resetting a test environment
 
@@ -78,7 +108,8 @@ The demo's `myproject:xpagedocument`, `new-xpage-document` and `new-xpage-folder
   lists these components per page (`CONTENT BEAN` warning).
 * `primaryDocumentMode: "mixin"`: the XPage is added to the existing content document itself (its type must allow
   `hst:xpagemixin`). Use this for the pages flagged above – a mixed run is fine:
-  `{"steps": "convert", "primaryDocumentMode": "mixin", "includePaths": "products/details"}` first, then the normal run.
+  `{"steps": "convert,sitemap,cleanup", "primaryDocumentMode": "mixin", "includePaths": "products/details"}` first,
+  then the normal run. Run the mixin batch including `cleanup`, otherwise the normal run converts those items again.
 
 ### Customization hooks
 
@@ -124,7 +155,7 @@ Log target `REPOSITORY` keeps the output in the updater history; set log level t
 | Parameter | Default | Meaning |
 |---|---|---|
 | `hstConfigurations` | – (required) | comma separated configuration names (`hstConfiguration` also accepted) |
-| `steps` | `analyze` | `analyze`, `templates`, `sitemap`, `convert`, `cleanup` (comma separated) |
+| `steps` | `analyze` | `analyze`, `templates`, `convert`, `sitemap`, `cleanup` (comma separated) |
 | `defaultXpageDocType` | – (required for convert) | e.g. `myproject:xpagedocument` |
 | `primaryDocumentMode` | `connector` | `connector` or `mixin`, see above |
 | `xPageFolder` | `xpages` | folder below the content root that receives the documents |
@@ -142,8 +173,9 @@ Log target `REPOSITORY` keeps the output in the updater history; set log level t
 | `parseInheritedHstConfiguration` | `false` | also convert prototype pages of inherited configurations |
 | `overwriteXPageTemplates` | `false` | let `templates` replace existing layouts |
 | `generateMissingTemplates` | `false` | let `templates` derive layouts from pages that nothing else can host |
-| `discardPreviewConfiguration` | `false` | delete `<config>-preview` instead of aborting |
-| `cleanupUnpublished` | `false` | let `cleanup` repoint items whose XPage is not published yet |
+| `discardPreviewConfiguration` | `true` | delete `<config>-preview` before writing; `false` aborts instead |
+| `cleanupUnpublished` | `false` | let `cleanup` repoint/remove items whose XPage is not published yet |
+| `sitemapStrategy` | `wildcard` | `wildcard` (remove converted items, URLs via the `_default_` chain) or `explicit` (keep and repoint them) |
 | `includePaths` | – | only handle these sitemap paths (and below) |
 | `limit` | `0` | convert at most N items per run |
 | `logLevel` | `item` | `summary`, `item` or `trace` |

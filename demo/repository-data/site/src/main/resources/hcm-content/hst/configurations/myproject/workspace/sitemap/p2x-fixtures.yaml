@@ -20,6 +20,11 @@
     jcr:primaryType: hst:sitemapitem
     hst:componentconfigurationid: hst:pages/p2x-reference-contentpage
     hst:relativecontentpath: content/another-sample-document
+  /with-refid:
+    jcr:primaryType: hst:sitemapitem
+    hst:componentconfigurationid: hst:pages/p2x-shared-contentpage
+    hst:refId: p2x-with-refid
+    hst:pagetitle: Item with own properties (stays explicit)
   /two-columns:
     jcr:primaryType: hst:sitemapitem
     hst:componentconfigurationid: hst:pages/p2x-twocolumns-page
